@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.2] - 2025-12-01
+## [1.4.0] - 2025-12-01
 ### Fixed
 - **Docker Build**: Switched base image to `python:3.9` to resolve missing build dependencies.
 - **Docs**: Fixed dead links and base URL configuration for GitHub Pages.
