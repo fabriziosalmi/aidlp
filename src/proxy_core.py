@@ -1,0 +1,96 @@
+import logging
+import json
+import time
+import os
+import asyncio
+from mitmproxy import http
+from src.dlp_engine import DLPEngine
+from src.config import config
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("dlp_proxy")
+
+class StatsManager:
+    def __init__(self, stats_file="stats.json", flush_interval=1):
+        self.stats_file = stats_file
+        self.flush_interval = flush_interval
+        self.current_stats = {
+            "total_requests": 0,
+            "total_redacted": 0,
+            "static_replacements": 0,
+            "ml_replacements": 0,
+            "total_time": 0
+        }
+        self.last_flush = time.time()
+        self._load_stats()
+
+    def _load_stats(self):
+        if os.path.exists(self.stats_file):
+            try:
+                with open(self.stats_file, "r") as f:
+                    saved_stats = json.load(f)
+                    for k, v in saved_stats.items():
+                        self.current_stats[k] = v
+            except Exception as e:
+                logger.error(f"Failed to load stats: {e}")
+
+    def update(self, request_stats: dict, duration: float):
+        self.current_stats["total_requests"] += 1
+        self.current_stats["total_redacted"] += 1
+        self.current_stats["static_replacements"] += request_stats.get("static_replacements", 0)
+        self.current_stats["ml_replacements"] += request_stats.get("ml_replacements", 0)
+        self.current_stats["total_time"] += duration
+        
+        if time.time() - self.last_flush > self.flush_interval:
+            self.flush()
+
+    def flush(self):
+        try:
+            with open(self.stats_file, "w") as f:
+                json.dump(self.current_stats, f)
+            self.last_flush = time.time()
+        except Exception as e:
+            logger.error(f"Failed to flush stats: {e}")
+
+class DLPAddon:
+    def __init__(self):
+        self.dlp_engine = DLPEngine()
+        self.stats_manager = StatsManager()
+        logger.info("DLP Engine initialized")
+
+    def request(self, flow: http.HTTPFlow):
+        # We can inspect request content here if we want to redact outgoing data (which is the use case: "proxy dlp in uscita")
+        # "uscita verso gli endpoint llm" -> Client sends request to Proxy -> Proxy sends to LLM.
+        # So we need to redact the REQUEST body.
+        
+        if flow.request.method in ["POST", "PUT", "PATCH"] and flow.request.content:
+            # We need to schedule the async task. 
+            # mitmproxy supports async event handlers if we define them as async def.
+            # But the current structure is sync. Let's make it async.
+            asyncio.create_task(self.process_request(flow))
+
+    async def process_request(self, flow: http.HTTPFlow):
+        try:
+            content_str = flow.request.get_text()
+            if content_str:
+                start_time = time.time()
+                
+                # Offload blocking ML call to thread
+                redacted_content, stats = await asyncio.to_thread(self.dlp_engine.redact, content_str)
+                
+                duration = time.time() - start_time
+                
+                if redacted_content != content_str:
+                    flow.request.set_text(redacted_content)
+                    logger.info(f"Redacted request to {flow.request.pretty_url}: {stats}")
+                    self.stats_manager.update(stats, duration)
+        except Exception as e:
+            logger.error(f"Error redacting request: {e}")
+
+    def response(self, flow: http.HTTPFlow):
+        pass
+
+addons = [
+    DLPAddon()
+]

@@ -1,0 +1,19 @@
+proxy:
+  port: 8080
+  host: 0.0.0.0
+  ssl_bump: true
+
+dlp:
+  static_terms:
+    - "password"
+    - "secret"
+    - "api_key"
+  ml_enabled: true
+  ml_threshold: 0.5
+  replacement_token: "[REDACTED]"
+
+upstream:
+  # Example: Map a fake domain to a real one, or just use as a regular forward proxy
+  # For this implementation, we'll assume it acts as a transparent/explicit proxy
+  # But we can define overrides if needed.
+  default_scheme: "https"

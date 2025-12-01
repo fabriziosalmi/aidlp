@@ -1,0 +1,7 @@
+mitmproxy
+flashtext
+presidio-analyzer
+presidio-anonymizer
+typer
+pyyaml
+spacy
