@@ -23,15 +23,14 @@
 
 3.  **Install dependencies**:
     ```bash
-    pip install -r requirements.txt
-    python -m spacy download en_core_web_lg
+    pip install poetry
+    poetry install
+    poetry run python -m spacy download en_core_web_lg
     ```
 
 4.  **Start the proxy**:
     ```bash
-    # Ensure src is in python path
-    export PYTHONPATH=$PYTHONPATH:$(pwd)
-    python src/cli.py start
+    poetry run python src/cli.py start
     ```
 
     The proxy will start on port `8080` (traffic) and `9090` (metrics).

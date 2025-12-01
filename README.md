@@ -79,14 +79,14 @@ The system is built on top of `mitmproxy`'s robust core, extended with a custom 
 
 3.  **Install dependencies**:
     ```bash
-    pip install -r requirements.txt
-    pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
+    pip install poetry
+    poetry install
+    poetry run python -m spacy download en_core_web_lg
     ```
 
 4.  **Start the proxy**:
     ```bash
-    export PYTHONPATH=$PYTHONPATH:$(pwd)
-    python src/cli.py start --port 8080
+    poetry run python src/cli.py start --port 8080
     ```
 
 ### Docker Deployment
