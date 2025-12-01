@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.6] - 2025-12-01
+### Security
+- **CRITICAL**: Updated `h11` to 0.16.0 (fixed malformed Chunked-Encoding vulnerability)
+- **HIGH**: Updated `brotli` to 1.2.0 (fixed DoS vulnerability)
+- **HIGH**: Updated `mitmproxy` to 12.2.1 (fixed API authentication bypass)
+- **MEDIUM**: Updated `cryptography` to 46.0.3 (fixed vulnerable OpenSSL)
+- **MEDIUM**: Updated `esbuild` via npm (fixed request bypass)
+
+### Fixed
+- Fixed VitePress documentation build configuration
+- Fixed GitHub Pages deployment path
+- Fixed flake8 configuration to exclude `.venv` directory
+- Fixed Poetry installation and dependency resolution
+
+### Changed
+- Migrated CI/CD to Poetry for dependency management
+- Updated all outdated dependencies to latest secure versions
+- Added `poetry-plugin-export` to Dockerfile for builds
+
+### Documentation
+- Updated README with Poetry installation instructions
+- Updated getting started guide
+- Fixed documentation deployment workflow
+
 ## [1.6.0] - 2025-12-01
 ### Added
 - **Documentation**: Comprehensive overhaul:
