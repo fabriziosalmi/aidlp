@@ -72,7 +72,7 @@ class StatsManager:
             except Exception as e:
                 logger.error(f"Failed to load stats: {e}")
 
-    def update(
+    async def update(
             self,
             request_stats: dict,
             duration: float,
@@ -93,7 +93,7 @@ class StatsManager:
             self.current_stats["upstream_hosts"][upstream_host] += 1
 
         if time.time() - self.last_flush > self.flush_interval:
-            self.flush()
+            await asyncio.to_thread(self.flush)
 
     def increment_active(self):
         self.current_stats["active_connections"] += 1
@@ -138,7 +138,7 @@ class DLPAddon:
 
         logger.info("DLP Engine initialized")
 
-    def request(self, flow: http.HTTPFlow):
+    async def request(self, flow: http.HTTPFlow):
         # We can inspect request content here if we want to redact outgoing
         # data
         # (which is the use case: "proxy dlp in uscita")
@@ -148,13 +148,9 @@ class DLPAddon:
 
         if flow.request.method in ["POST", "PUT",
                                    "PATCH"] and flow.request.content:
-            # We need to schedule the async task.
-            # mitmproxy supports async event handlers if we define them as
-            # async def.
-            # But the current structure is sync. Let's make it async.
-            asyncio.create_task(
-                self.process_request(flow)
-            )
+            # Await the process_request to ensure redaction happens BEFORE forwarding.
+            # This makes the proxy blocking for the duration of the analysis.
+            await self.process_request(flow)
 
     async def process_request(self, flow: http.HTTPFlow):
         self.stats_manager.increment_active()
@@ -195,7 +191,7 @@ class DLPAddon:
                         "Redacted request",
                         extra={"url": flow.request.pretty_url, "stats": stats}
                     )
-                    self.stats_manager.update(
+                    await self.stats_manager.update(
                         stats, duration, upstream_host=flow.request.host
                     )
                 else:
@@ -205,6 +201,12 @@ class DLPAddon:
                     )
         except Exception as e:
             logger.error("Error redacting request", extra={"error": str(e)})
+            # Fail Closed: Block the request if DLP fails
+            flow.response = http.Response.make(
+                500,
+                b"DLP Engine Error: Request blocked for safety.",
+                {"Content-Type": "text/plain"}
+            )
         finally:
             self.stats_manager.decrement_active()
             ACTIVE_CONNECTIONS.dec()

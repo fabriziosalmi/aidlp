@@ -152,17 +152,15 @@ class DLPEngine:
         }
 
         # 1. Static Redaction (Fastest)
-        # Flashtext replaces in-place or returns new string.
-        # To get stats, we might need to extract keywords first or just trust
-        # the replacement count if flashtext supported it easily.
-        # For now, let's just do replacement.
-        # To count, we can extract keywords first.
-        keywords_found = self.keyword_processor.extract_keywords(
-            text
-        )
-        stats["static_replacements"] = len(keywords_found)
-
+        # Optimized to single pass: replace_keywords is faster than extract + replace.
+        # We lose exact count of replacements, but we can detect if change occurred.
         text_after_static = self.keyword_processor.replace_keywords(text)
+
+        if text_after_static != text:
+            # We don't know exact count without double pass, so we set to 1 as indicator
+            stats["static_replacements"] = 1
+        else:
+            stats["static_replacements"] = 0
 
         if not self.ml_enabled:
             return text_after_static, stats
