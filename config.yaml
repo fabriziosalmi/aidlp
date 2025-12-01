@@ -2,6 +2,7 @@ proxy:
   port: 8080
   host: 0.0.0.0
   ssl_bump: true
+  metrics_port: 9090
 
 dlp:
   static_terms_file: "terms.txt"

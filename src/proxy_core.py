@@ -59,12 +59,12 @@ class StatsManager:
         self.current_stats["static_replacements"] += request_stats.get("static_replacements", 0)
         self.current_stats["ml_replacements"] += request_stats.get("ml_replacements", 0)
         self.current_stats["total_time"] += duration
-        
+
         if upstream_host:
             if upstream_host not in self.current_stats["upstream_hosts"]:
                 self.current_stats["upstream_hosts"][upstream_host] = 0
             self.current_stats["upstream_hosts"][upstream_host] += 1
-        
+
         if time.time() - self.last_flush > self.flush_interval:
             self.flush()
 
@@ -84,27 +84,34 @@ class StatsManager:
         except Exception as e:
             logger.error(f"Failed to flush stats: {e}")
 
+
 class DLPAddon:
     def __init__(self):
         self.dlp_engine = DLPEngine()
         self.stats_manager = StatsManager()
-        
-        # Start Prometheus metrics server on port 9090
+
+        # Start Prometheus metrics server
+        metrics_port = config.get("proxy.metrics_port", 9090)
         try:
-            start_http_server(9090)
-            logger.info("Prometheus metrics server started on port 9090")
+            start_http_server(metrics_port)
+            logger.info(f"Prometheus metrics server started on port {metrics_port}")
+        except OSError as e:
+            if e.errno == 48:  # Address already in use
+                logger.error(f"Failed to start Prometheus server on port {metrics_port}: Address already in use. Metrics will not be available.")
+            else:
+                logger.error(f"Failed to start Prometheus server: {e}")
         except Exception as e:
             logger.error(f"Failed to start Prometheus server: {e}")
-            
+
         logger.info("DLP Engine initialized")
 
     def request(self, flow: http.HTTPFlow):
         # We can inspect request content here if we want to redact outgoing data (which is the use case: "proxy dlp in uscita")
         # "uscita verso gli endpoint llm" -> Client sends request to Proxy -> Proxy sends to LLM.
         # So we need to redact the REQUEST body.
-        
+
         if flow.request.method in ["POST", "PUT", "PATCH"] and flow.request.content:
-            # We need to schedule the async task. 
+            # We need to schedule the async task.
             # mitmproxy supports async event handlers if we define them as async def.
             # But the current structure is sync. Let's make it async.
             asyncio.create_task(self.process_request(flow))
@@ -117,26 +124,27 @@ class DLPAddon:
             content_str = flow.request.get_text()
             if content_str:
                 start_time = time.time()
-                
+
                 # Offload blocking ML call to thread
                 with LATENCY.time():
                     redacted_content, stats = await asyncio.to_thread(self.dlp_engine.redact, content_str)
-                
+
                 duration = time.time() - start_time
-                
+
                 if redacted_content != content_str:
                     flow.request.set_text(redacted_content)
                     REDACTED_TOTAL.inc()
-                    logger.info(f"Redacted request", extra={"url": flow.request.pretty_url, "stats": stats})
+                    logger.info("Redacted request", extra={"url": flow.request.pretty_url, "stats": stats})
                     self.stats_manager.update(stats, duration, upstream_host=flow.request.host)
         except Exception as e:
-            logger.error(f"Error redacting request", extra={"error": str(e)})
+            logger.error("Error redacting request", extra={"error": str(e)})
         finally:
             self.stats_manager.decrement_active()
             ACTIVE_CONNECTIONS.dec()
 
     def response(self, flow: http.HTTPFlow):
         pass
+
 
 addons = [
     DLPAddon()
