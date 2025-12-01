@@ -35,7 +35,9 @@ class FileTermProvider(TermProvider):
 
 
 class VaultTermProvider(TermProvider):
-    def __init__(self, url: str, token: str, path: str, mount_point: str = "secret"):
+    def __init__(
+        self, url: str, token: str, path: str, mount_point: str = "secret"
+    ):
         self.client = hvac.Client(url=url, token=token)
         self.path = path
         self.mount_point = mount_point
@@ -52,9 +54,12 @@ class VaultTermProvider(TermProvider):
                 mount_point=self.mount_point
             )
 
-            # Assuming terms are stored as keys or a specific list in the secret
+            # Assuming terms are stored as keys or a specific list in the
+            # secret
             # Strategy: Take all values from the secret dictionary
-            data = read_response['data']['data']
+            data = read_response['data'][
+                'data'
+            ]
             terms = []
             for key, value in data.items():
                 if isinstance(value, list):
@@ -77,10 +82,15 @@ class DLPEngine:
 
         # Initialize Presidio Analyzer with specific model
         # Note: Presidio loads 'en' by default which maps to a model.
-        # To support switching, we need to ensure the language config points to the right model or use a custom configuration.
-        # For simplicity in this setup, we assume the environment has the model and we might need to adjust how Presidio loads it if it's not standard 'en'.
-        # However, standard Presidio usage relies on 'en' mapping to loaded spacy model.
-        # If we want to force a specific spacy model, we can configure the NlpEngine.
+        # To support switching, we need to ensure the language config points
+        # to the right model or use a custom configuration.
+        # For simplicity in this setup, we assume the environment has the model
+        # and we might need to adjust how Presidio loads it if it's not
+        # standard 'en'.
+        # However, standard Presidio usage relies on 'en' mapping to loaded
+        # spacy model.
+        # If we want to force a specific spacy model, we can configure the
+        # NlpEngine.
 
         from presidio_analyzer.nlp_engine import NlpEngineProvider
 
@@ -106,7 +116,9 @@ class DLPEngine:
         terms = []
         if provider_type == "vault":
             url = config.get("dlp.secrets_provider.vault.url")
-            token = config.get("dlp.secrets_provider.vault.token") or os.getenv("VAULT_TOKEN")
+            token = config.get(
+                "dlp.secrets_provider.vault.token"
+            ) or os.getenv("VAULT_TOKEN")
             path = config.get("dlp.secrets_provider.vault.path")
             if url and token and path:
                 provider = VaultTermProvider(url, token, path)
@@ -122,12 +134,15 @@ class DLPEngine:
             logger.info(f"Loaded {len(terms)} terms from file: {file_path}")
 
         for term in terms:
-            self.keyword_processor.add_keyword(term, config.get("dlp.replacement_token", "[REDACTED]"))
+            self.keyword_processor.add_keyword(
+                term, config.get("dlp.replacement_token", "[REDACTED]")
+            )
 
         self.ml_enabled = config.get("dlp.ml_enabled", True)
         self.ml_threshold = config.get("dlp.ml_threshold", 0.5)
         self.entities = config.get("dlp.entities")
-        self.replacement_token = config.get("dlp.replacement_token", "[REDACTED]")
+        self.replacement_token = config.get(
+            "dlp.replacement_token", "[REDACTED]")
 
     def redact(self, text: str) -> Tuple[str, Dict[str, int]]:
         stats = {
@@ -138,10 +153,13 @@ class DLPEngine:
 
         # 1. Static Redaction (Fastest)
         # Flashtext replaces in-place or returns new string.
-        # To get stats, we might need to extract keywords first or just trust the replacement count if flashtext supported it easily.
+        # To get stats, we might need to extract keywords first or just trust
+        # the replacement count if flashtext supported it easily.
         # For now, let's just do replacement.
         # To count, we can extract keywords first.
-        keywords_found = self.keyword_processor.extract_keywords(text)
+        keywords_found = self.keyword_processor.extract_keywords(
+            text
+        )
         stats["static_replacements"] = len(keywords_found)
 
         text_after_static = self.keyword_processor.replace_keywords(text)
@@ -150,7 +168,9 @@ class DLPEngine:
             return text_after_static, stats
 
         # 2. ML Redaction
-        results = self.analyzer.analyze(text=text_after_static, language='en', entities=self.entities)
+        results = self.analyzer.analyze(
+            text=text_after_static, language='en', entities=self.entities
+        )
 
         # Filter by threshold
         results = [r for r in results if r.score >= self.ml_threshold]
@@ -159,11 +179,15 @@ class DLPEngine:
         # Count PII types
         for r in results:
             entity_type = r.entity_type
-            stats["pii_types"][entity_type] = stats["pii_types"].get(entity_type, 0) + 1
+            stats["pii_types"][entity_type] = stats["pii_types"].get(
+                entity_type, 0) + 1
 
         # Define anonymizer operators
         operators = {
-            "DEFAULT": OperatorConfig("replace", {"new_value": self.replacement_token}),
+            "DEFAULT": OperatorConfig(
+                "replace",
+                {"new_value": self.replacement_token}
+            ),
         }
 
         anonymized_result = self.anonymizer.anonymize(

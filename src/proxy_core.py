@@ -21,12 +21,29 @@ logger.setLevel(logging.INFO)
 logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 
 # Prometheus Metrics
-REQUESTS_TOTAL = Counter('dlp_requests_total', 'Total number of DLP requests processed')
-REDACTED_TOTAL = Counter('dlp_redacted_total', 'Total number of requests redacted')
-PII_DETECTED_TOTAL = Counter('dlp_pii_detected_total', 'Total number of PII entities detected', ['type'])
-TOKEN_USAGE_TOTAL = Counter('dlp_token_usage_total', 'Estimated token usage', ['direction'])
-LATENCY = Histogram('dlp_latency_seconds', 'Time spent processing DLP requests', buckets=[.005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0])
-ACTIVE_CONNECTIONS = Gauge('dlp_active_connections', 'Number of currently active connections')
+REQUESTS_TOTAL = Counter('dlp_requests_total',
+                         'Total number of DLP requests processed')
+REDACTED_TOTAL = Counter(
+    'dlp_redacted_total', 'Total number of requests redacted'
+)
+PII_DETECTED_TOTAL = Counter(
+    'dlp_pii_detected_total',
+    'Total number of PII entities detected',
+    ['type']
+)
+TOKEN_USAGE_TOTAL = Counter(
+    'dlp_token_usage_total', 'Estimated token usage', ['direction']
+)
+LATENCY = Histogram(
+    'dlp_latency_seconds',
+    'Time spent processing DLP requests',
+    buckets=[
+        .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0
+    ]
+)
+ACTIVE_CONNECTIONS = Gauge(
+    'dlp_active_connections',
+    'Number of currently active connections')
 
 
 class StatsManager:
@@ -55,11 +72,19 @@ class StatsManager:
             except Exception as e:
                 logger.error(f"Failed to load stats: {e}")
 
-    def update(self, request_stats: dict, duration: float, upstream_host: str = None):
+    def update(
+            self,
+            request_stats: dict,
+            duration: float,
+            upstream_host: str = None):
         self.current_stats["total_requests"] += 1
         self.current_stats["total_redacted"] += 1
-        self.current_stats["static_replacements"] += request_stats.get("static_replacements", 0)
-        self.current_stats["ml_replacements"] += request_stats.get("ml_replacements", 0)
+        self.current_stats["static_replacements"] += request_stats.get(
+            "static_replacements", 0
+        )
+        self.current_stats["ml_replacements"] += request_stats.get(
+            "ml_replacements", 0
+        )
         self.current_stats["total_time"] += duration
 
         if upstream_host:
@@ -72,7 +97,8 @@ class StatsManager:
 
     def increment_active(self):
         self.current_stats["active_connections"] += 1
-        # Optional: flush on change if we want real-time "active" view, but interval is fine
+        # Optional: flush on change if we want real-time "active" view, but
+        # interval is fine
 
     def decrement_active(self):
         if self.current_stats["active_connections"] > 0:
@@ -96,10 +122,15 @@ class DLPAddon:
         metrics_port = config.get("proxy.metrics_port", 9090)
         try:
             start_http_server(metrics_port)
-            logger.info(f"Prometheus metrics server started on port {metrics_port}")
+            logger.info(
+                f"Prometheus metrics server started on port {metrics_port}")
         except OSError as e:
             if e.errno == 48:  # Address already in use
-                logger.error(f"Failed to start Prometheus server on port {metrics_port}: Address already in use. Metrics will not be available.")
+                logger.error(
+                    f"Failed to start Prometheus server on port "
+                    f"{metrics_port}: "
+                    "Address already in use. Metrics will not be available."
+                )
             else:
                 logger.error(f"Failed to start Prometheus server: {e}")
         except Exception as e:
@@ -108,15 +139,22 @@ class DLPAddon:
         logger.info("DLP Engine initialized")
 
     def request(self, flow: http.HTTPFlow):
-        # We can inspect request content here if we want to redact outgoing data (which is the use case: "proxy dlp in uscita")
-        # "uscita verso gli endpoint llm" -> Client sends request to Proxy -> Proxy sends to LLM.
+        # We can inspect request content here if we want to redact outgoing
+        # data
+        # (which is the use case: "proxy dlp in uscita")
+        # "uscita verso gli endpoint llm" -> Client sends request to Proxy
+        # -> Proxy sends to LLM.
         # So we need to redact the REQUEST body.
 
-        if flow.request.method in ["POST", "PUT", "PATCH"] and flow.request.content:
+        if flow.request.method in ["POST", "PUT",
+                                   "PATCH"] and flow.request.content:
             # We need to schedule the async task.
-            # mitmproxy supports async event handlers if we define them as async def.
+            # mitmproxy supports async event handlers if we define them as
+            # async def.
             # But the current structure is sync. Let's make it async.
-            asyncio.create_task(self.process_request(flow))
+            asyncio.create_task(
+                self.process_request(flow)
+            )
 
     async def process_request(self, flow: http.HTTPFlow):
         self.stats_manager.increment_active()
@@ -129,7 +167,9 @@ class DLPAddon:
 
                 # Offload blocking ML call to thread
                 with LATENCY.time():
-                    redacted_content, stats = await asyncio.to_thread(self.dlp_engine.redact, content_str)
+                    redacted_content, stats = await asyncio.to_thread(
+                        self.dlp_engine.redact, content_str
+                    )
 
                 duration = time.time() - start_time
 
@@ -143,18 +183,26 @@ class DLPAddon:
 
                     # Token Usage Estimation (Output - if changed)
                     output_tokens = len(redacted_content) / 4
-                    TOKEN_USAGE_TOTAL.labels(direction='output').inc(output_tokens)
+                    TOKEN_USAGE_TOTAL.labels(
+                        direction='output').inc(output_tokens)
 
                     # PII Metrics
                     if "pii_types" in stats:
                         for pii_type, count in stats["pii_types"].items():
                             PII_DETECTED_TOTAL.labels(type=pii_type).inc(count)
 
-                    logger.info("Redacted request", extra={"url": flow.request.pretty_url, "stats": stats})
-                    self.stats_manager.update(stats, duration, upstream_host=flow.request.host)
+                    logger.info(
+                        "Redacted request",
+                        extra={"url": flow.request.pretty_url, "stats": stats}
+                    )
+                    self.stats_manager.update(
+                        stats, duration, upstream_host=flow.request.host
+                    )
                 else:
                     # No redaction, output tokens = input tokens
-                    TOKEN_USAGE_TOTAL.labels(direction='output').inc(input_tokens)
+                    TOKEN_USAGE_TOTAL.labels(direction='output').inc(
+                        input_tokens
+                    )
         except Exception as e:
             logger.error("Error redacting request", extra={"error": str(e)})
         finally:
