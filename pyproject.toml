@@ -26,6 +26,7 @@ requests = "^2.31.0"  # Needed for CLI stats fetching
 pytest = "^7.4.0"
 pytest-asyncio = "^0.23.0"
 locust = "^2.20.0"
+flake8 = "^7.3.0"
 
 [build-system]
 requires = ["poetry-core"]
