@@ -29,7 +29,7 @@ A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy
 
 ## Overview
 
-In the era of Generative AI, preventing data leakage is paramount. Developers often inadvertently paste secrets, PII, or internal database connection strings into LLM prompts. The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM providers (like OpenAI, Anthropic) and redacting sensitive data in real-time using a hybrid approach of static rules and Machine Learning models.
+The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM providers (like OpenAI, Anthropic) and redacting sensitive data in real-time using a hybrid approach of static rules and Machine Learning models.
 
 ## Features
 
