@@ -1,6 +1,6 @@
 {
     "name": "aidlp-docs",
-    "version": "1.0.0",
+    "version": "1.7.0",
     "description": "Documentation for AI DLP Proxy",
     "scripts": {
         "docs:dev": "vitepress dev docs",
@@ -8,6 +8,8 @@
         "docs:preview": "vitepress preview docs"
     },
     "devDependencies": {
-        "vitepress": "^1.0.0"
+        "mermaid": "^11.12.1",
+        "vitepress": "^1.0.0",
+        "vitepress-plugin-mermaid": "^2.0.17"
     }
 }

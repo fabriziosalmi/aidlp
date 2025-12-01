@@ -49,3 +49,53 @@ Sensitive configuration can be overridden via environment variables:
 
 - `VAULT_TOKEN`: Authentication token for HashiCorp Vault.
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`: Used in CI/CD for publishing images.
+
+## Full Configuration Example
+
+```yaml
+# config.yaml
+proxy:
+  # The port the proxy listens on for incoming traffic
+  port: 8080
+  # The port for Prometheus metrics
+  metrics_port: 9090
+  # Enable SSL interception (required for DLP)
+  ssl_bump: true
+
+dlp:
+  # Path to file containing static sensitive terms (one per line)
+  static_terms_file: "terms.txt"
+
+  # Enable Machine Learning based detection
+  ml_enabled: true
+
+  # Confidence threshold (0.0 - 1.0)
+  # Higher = fewer false positives, potentially more missed PII
+  ml_threshold: 0.8
+
+  # NLP Model to use
+  # "en_core_web_lg" (Accurate, Slower)
+  # "en_core_web_sm" (Fast, Less Accurate)
+  nlp_model: "en_core_web_sm"
+
+  # Specific entities to detect. If null, detects all.
+  # See Presidio docs for full list.
+  entities:
+    - "PERSON"
+    - "PHONE_NUMBER"
+    - "EMAIL_ADDRESS"
+    - "CREDIT_CARD"
+
+  # String to replace sensitive data with
+  replacement_token: "[REDACTED]"
+
+  # Secrets Provider Configuration
+  secrets_provider:
+    # "file" or "vault"
+    type: "vault"
+    vault:
+      url: "http://localhost:8200"
+      path: "aidlp/terms"
+      # Token can also be set via VAULT_TOKEN env var
+      # token: "hvs.xxx"
+```

@@ -10,3 +10,4 @@ proxy_verify.log
 proxy_obs.log
 commits.txt
 proxy.pid
+node_modules/
