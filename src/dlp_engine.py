@@ -3,6 +3,8 @@ import os
 from typing import Tuple, Dict
 from abc import ABC, abstractmethod
 import hvac
+import pybreaker
+
 from flashtext import KeywordProcessor
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
@@ -41,35 +43,53 @@ class VaultTermProvider(TermProvider):
         self.client = hvac.Client(url=url, token=token)
         self.path = path
         self.mount_point = mount_point
+        # Circuit Breaker: Fail fast if Vault is down.
+        # 3 failures, 60s reset timeout.
+        self.breaker = pybreaker.CircuitBreaker(
+            fail_max=3,
+            reset_timeout=60
+        )
+        self._cached_terms = []
 
     def get_terms(self) -> list[str]:
         try:
-            if not self.client.is_authenticated():
-                logger.error("Vault client is not authenticated")
-                return []
-
-            # Read secret from Vault (KV v2)
-            read_response = self.client.secrets.kv.v2.read_secret_version(
-                path=self.path,
-                mount_point=self.mount_point
-            )
-
-            # Assuming terms are stored as keys or a specific list in the
-            # secret
-            # Strategy: Take all values from the secret dictionary
-            data = read_response['data'][
-                'data'
-            ]
-            terms = []
-            for key, value in data.items():
-                if isinstance(value, list):
-                    terms.extend([str(v) for v in value])
-                else:
-                    terms.append(str(value))
-            return terms
+            return self.breaker.call(self._fetch_from_vault)
+        except pybreaker.CircuitBreakerError:
+            logger.error("Vault Circuit Breaker open. Using cached terms.")
+            return self._cached_terms
         except Exception as e:
             logger.error(f"Failed to fetch terms from Vault: {e}")
-            return []
+            return self._cached_terms
+
+    def _fetch_from_vault(self) -> list[str]:
+        if not self.client.is_authenticated():
+            logger.error("Vault client is not authenticated")
+            # If not authenticated, maybe we shouldn't raise to breaker?
+            # But it is a failure.
+            raise Exception("Vault client not authenticated")
+
+        # Read secret from Vault (KV v2)
+        read_response = self.client.secrets.kv.v2.read_secret_version(
+            path=self.path,
+            mount_point=self.mount_point
+        )
+
+        # Assuming terms are stored as keys or a specific list in the
+        # secret
+        # Strategy: Take all values from the secret dictionary
+        data = read_response['data'][
+            'data'
+        ]
+        terms = []
+        for key, value in data.items():
+            if isinstance(value, list):
+                terms.extend([str(v) for v in value])
+            else:
+                terms.append(str(value))
+
+        # Update cache on success
+        self._cached_terms = terms
+        return terms
 
 
 class DLPEngine:
@@ -91,9 +111,7 @@ class DLPEngine:
         # spacy model.
         # If we want to force a specific spacy model, we can configure the
         # NlpEngine.
-
         from presidio_analyzer.nlp_engine import NlpEngineProvider
-
         nlp_configuration = {
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "en", "model_name": model_name}],

@@ -5,7 +5,14 @@ services:
     build: .
     ports:
       - "8080:8080"
+      - "9090:9090" # Expose metrics
     volumes:
       - ./config.yaml:/app/config.yaml
     environment:
       - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G

@@ -57,11 +57,11 @@ async def load_test(num_clients, duration, proxy_url, target_url):
     p99 = latencies[int(len(latencies) * 0.99)]
     avg = statistics.mean(latencies)
 
-    print(f"\nResults ({len(latencies)} requests):")
-    print(f"  Avg Latency: {avg*1000:.2f}ms")
-    print(f"  P50 Latency: {p50*1000:.2f}ms")
-    print(f"  P95 Latency: {p95*1000:.2f}ms")
-    print(f"  P99 Latency: {p99*1000:.2f}ms")
+    print(f"\nResults ({len(latencies)} requests):")  # noqa: E231
+    print(f"  Avg Latency: {avg * 1000:.2f}ms")  # noqa: E231
+    print(f"  P50 Latency: {p50 * 1000:.2f}ms")  # noqa: E231
+    print(f"  P95 Latency: {p95 * 1000:.2f}ms")  # noqa: E231
+    print(f"  P99 Latency: {p99 * 1000:.2f}ms")  # noqa: E231
 
     if p95 < 0.1:
         print("\nSUCCESS: P95 Latency is < 100ms")

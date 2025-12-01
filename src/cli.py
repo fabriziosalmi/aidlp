@@ -1,6 +1,8 @@
 import typer
 import subprocess
 import os
+import requests
+import re
 
 app = typer.Typer()
 
@@ -17,6 +19,8 @@ def start(port: int = 8080, ssl_bump: bool = True):
         "mitmdump",
         "-s", "src/proxy_core.py",
         "-p", str(port),
+        "--ssl-version-client", "TLS1_2",
+        "--ssl-version-server", "TLS1_2",
     ]
 
     if ssl_bump:
@@ -39,32 +43,32 @@ def stats():
     """
     Show current stats.
     """
-    stats_file = "stats.json"
-    if not os.path.exists(stats_file):
-        typer.echo("No stats available yet.")
+    """
+    Show current stats from Prometheus.
+    """
+    metrics_url = "http://localhost:9090"
+    try:
+        response = requests.get(metrics_url)
+        response.raise_for_status()
+        metrics = response.text
+    except Exception as e:
+        typer.echo(f"Failed to fetch metrics from {metrics_url}: {e}")
+        typer.echo("Ensure the proxy is running.")
         return
 
-    import json
-    with open(stats_file, "r") as f:
-        data = json.load(f)
+    # Parse simple metrics using regex
+    def get_metric(name):
+        match = re.search(f"^{name} ([\\d\\.]+)", metrics, re.MULTILINE)
+        return float(match.group(1)) if match else 0
 
-    typer.echo("DLP Proxy Stats:")
-    typer.echo(f"  Total Requests Redacted: {data.get('total_redacted', 0)}")
-    typer.echo(f"  Active Connections: {data.get('active_connections', 0)}")
-    typer.echo(f"  Static Replacements: {data.get('static_replacements', 0)}")
-    typer.echo(f"  ML Replacements: {data.get('ml_replacements', 0)}")
+    total_requests = get_metric("dlp_requests_total")
+    redacted_requests = get_metric("dlp_redacted_total")
+    active_connections = get_metric("dlp_active_connections")
 
-    upstream_hosts = data.get('upstream_hosts', {})
-    if upstream_hosts:
-        typer.echo("  Upstream Hosts:")
-        for host, count in upstream_hosts.items():
-            typer.echo(f"    - {host}: {count}")
-
-    total_time = data.get('total_time', 0)
-    total_reqs = data.get('total_requests', 0)
-    if total_reqs > 0:
-        avg_time = total_time / total_reqs
-        typer.echo(f"  Avg Processing Time: {avg_time:.4f}s")
+    typer.echo("DLP Proxy Stats (Prometheus):")
+    typer.echo(f"  Total Requests: {int(total_requests)}")
+    typer.echo(f"  Redacted Requests: {int(redacted_requests)}")
+    typer.echo(f"  Active Connections: {int(active_connections)}")
 
 
 @app.command()

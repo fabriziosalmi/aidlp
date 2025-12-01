@@ -1,6 +1,4 @@
 import logging
-import json
-import time
 import os
 import asyncio
 from mitmproxy import http
@@ -46,77 +44,9 @@ ACTIVE_CONNECTIONS = Gauge(
     'Number of currently active connections')
 
 
-class StatsManager:
-    def __init__(self, stats_file="stats.json", flush_interval=60):
-        self.stats_file = stats_file
-        self.flush_interval = flush_interval
-        self.current_stats = {
-            "total_requests": 0,
-            "total_redacted": 0,
-            "static_replacements": 0,
-            "ml_replacements": 0,
-            "total_time": 0,
-            "active_connections": 0,
-            "upstream_hosts": {}
-        }
-        self.last_flush = time.time()
-        self._load_stats()
-
-    def _load_stats(self):
-        if os.path.exists(self.stats_file):
-            try:
-                with open(self.stats_file, "r") as f:
-                    saved_stats = json.load(f)
-                    for k, v in saved_stats.items():
-                        self.current_stats[k] = v
-            except Exception as e:
-                logger.error(f"Failed to load stats: {e}")
-
-    async def update(
-            self,
-            request_stats: dict,
-            duration: float,
-            upstream_host: str = None):
-        self.current_stats["total_requests"] += 1
-        self.current_stats["total_redacted"] += 1
-        self.current_stats["static_replacements"] += request_stats.get(
-            "static_replacements", 0
-        )
-        self.current_stats["ml_replacements"] += request_stats.get(
-            "ml_replacements", 0
-        )
-        self.current_stats["total_time"] += duration
-
-        if upstream_host:
-            if upstream_host not in self.current_stats["upstream_hosts"]:
-                self.current_stats["upstream_hosts"][upstream_host] = 0
-            self.current_stats["upstream_hosts"][upstream_host] += 1
-
-        if time.time() - self.last_flush > self.flush_interval:
-            await asyncio.to_thread(self.flush)
-
-    def increment_active(self):
-        self.current_stats["active_connections"] += 1
-        # Optional: flush on change if we want real-time "active" view, but
-        # interval is fine
-
-    def decrement_active(self):
-        if self.current_stats["active_connections"] > 0:
-            self.current_stats["active_connections"] -= 1
-
-    def flush(self):
-        try:
-            with open(self.stats_file, "w") as f:
-                json.dump(self.current_stats, f)
-            self.last_flush = time.time()
-        except Exception as e:
-            logger.error(f"Failed to flush stats: {e}")
-
-
 class DLPAddon:
     def __init__(self):
         self.dlp_engine = DLPEngine()
-        self.stats_manager = StatsManager()
 
         # Start Prometheus metrics server
         metrics_port = config.get("proxy.metrics_port", 9090)
@@ -135,7 +65,6 @@ class DLPAddon:
                 logger.error(f"Failed to start Prometheus server: {e}")
         except Exception as e:
             logger.error(f"Failed to start Prometheus server: {e}")
-
         logger.info("DLP Engine initialized")
 
     async def request(self, flow: http.HTTPFlow):
@@ -146,20 +75,57 @@ class DLPAddon:
         # -> Proxy sends to LLM.
         # So we need to redact the REQUEST body.
 
+        # Correlation ID
+        request_id = flow.request.headers.get("X-Request-ID")
+        if not request_id:
+            request_id = os.urandom(16).hex()
+            flow.request.headers["X-Request-ID"] = request_id
+
+        # Add to context for logging (simple approach, ideally use contextvar)
+        # We will pass it manually to extras
+        self.request_id = request_id
+
+        # Health Probe
+        if flow.request.path == "/_health" and flow.request.method == "GET":
+            is_healthy = True
+            # Check Vault (if used) - simplified check if engine is initialized
+            # In a real scenario, we might ping Vault here.
+            # Check Model
+            if not self.dlp_engine.analyzer:
+                is_healthy = False
+
+            if is_healthy:
+                flow.response = http.Response.make(200, b"OK", {"Content-Type": "text/plain"})
+            else:
+                flow.response = http.Response.make(503, b"Service Unavailable", {"Content-Type": "text/plain"})
+            return
+
         if flow.request.method in ["POST", "PUT",
                                    "PATCH"] and flow.request.content:
+
+            # Request Buffering Limit
+            if len(flow.request.content) > 10 * 1024 * 1024:  # 10MB
+                logger.warning("Request too large", extra={"request_id": request_id, "size": len(flow.request.content)})
+                flow.response = http.Response.make(
+                    413,
+                    b"Request Entity Too Large",
+                    {"Content-Type": "text/plain"}
+                )
+                return
+
             # Await the process_request to ensure redaction happens BEFORE forwarding.
             # This makes the proxy blocking for the duration of the analysis.
             await self.process_request(flow)
 
     async def process_request(self, flow: http.HTTPFlow):
-        self.stats_manager.increment_active()
+        request_id = flow.request.headers.get("X-Request-ID", "unknown")
+
         ACTIVE_CONNECTIONS.inc()
         REQUESTS_TOTAL.inc()
         try:
             content_str = flow.request.get_text()
             if content_str:
-                start_time = time.time()
+                # start_time = time.time()
 
                 # Offload blocking ML call to thread
                 with LATENCY.time():
@@ -167,7 +133,7 @@ class DLPAddon:
                         self.dlp_engine.redact, content_str
                     )
 
-                duration = time.time() - start_time
+                # duration = time.time() - start_time
 
                 # Token Usage Estimation (Input)
                 input_tokens = len(content_str) / 4
@@ -189,18 +155,17 @@ class DLPAddon:
 
                     logger.info(
                         "Redacted request",
-                        extra={"url": flow.request.pretty_url, "stats": stats}
+                        extra={"url": flow.request.pretty_url, "stats": stats, "request_id": request_id}
                     )
-                    await self.stats_manager.update(
-                        stats, duration, upstream_host=flow.request.host
-                    )
+
                 else:
                     # No redaction, output tokens = input tokens
                     TOKEN_USAGE_TOTAL.labels(direction='output').inc(
                         input_tokens
                     )
         except Exception as e:
-            logger.error("Error redacting request", extra={"error": str(e)})
+            logger.error("Error redacting request", extra={"error": str(e), "request_id": request_id})
+
             # Fail Closed: Block the request if DLP fails
             flow.response = http.Response.make(
                 500,
@@ -208,7 +173,7 @@ class DLPAddon:
                 {"Content-Type": "text/plain"}
             )
         finally:
-            self.stats_manager.decrement_active()
+
             ACTIVE_CONNECTIONS.dec()
 
     def response(self, flow: http.HTTPFlow):
@@ -216,8 +181,6 @@ class DLPAddon:
 
     def done(self):
         logger.info("Shutting down DLP Proxy...")
-        self.stats_manager.flush()
-        logger.info("Stats flushed.")
 
 
 addons = [
