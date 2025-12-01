@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aidlp"
-version = "1.9.2"
+version = "1.9.4"
 description = "AI Data Loss Prevention Proxy"
 authors = ["Fabrizio Salmi <fabrizio.salmi@gmail.com>"]
 readme = "README.md"
