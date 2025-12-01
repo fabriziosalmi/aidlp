@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2025-12-01
+### Fixed
+- **Docker Build**: Switched base image to `python:3.9` to resolve missing build dependencies.
+- **Docs**: Fixed dead links and base URL configuration for GitHub Pages.
+
+## [1.2.1] - 2025-12-01
+### Added
+- **CI/CD**: Added Docker release workflow (`docker-publish.yml`).
+
+## [1.2.0] - 2025-12-01
+### Added
+- **Vault Integration**: Added support for HashiCorp Vault as a secrets provider.
+
+## [1.1.0] - 2025-12-01
+### Added
+- **Documentation**: Initial setup of VitePress documentation.
+
+## [1.0.0] - 2025-12-01
+### Added
+- Initial stable release.
+
 ## [0.1.0] - 2025-12-01
 
 ### Added

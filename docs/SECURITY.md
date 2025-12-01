@@ -6,13 +6,13 @@ Use this section to tell people about which versions of your project are current
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
-| < 0.1   | :x:                |
+| 1.x     | :white_check_mark: |
+| < 1.0   | :x:                |
 
 ## Reporting a Vulnerability
 
 We take the security of this project seriously. If you discover a security vulnerability, please do NOT open a public issue.
 
-Instead, please report it privately via email to **security@example.com** (replace with actual email).
+Instead, please report it privately via email to **fabrizio.salmi@gmail.com**.
 
 We will acknowledge your report within 48 hours and provide an estimated timeframe for a fix.
