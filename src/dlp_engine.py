@@ -70,7 +70,29 @@ class VaultTermProvider(TermProvider):
 class DLPEngine:
     def __init__(self):
         self.keyword_processor = KeywordProcessor()
-        self.analyzer = AnalyzerEngine()
+
+        # Load NLP model from config
+        model_name = config.get("dlp.nlp_model", "en_core_web_lg")
+        logger.info(f"Loading NLP model: {model_name}")
+
+        # Initialize Presidio Analyzer with specific model
+        # Note: Presidio loads 'en' by default which maps to a model.
+        # To support switching, we need to ensure the language config points to the right model or use a custom configuration.
+        # For simplicity in this setup, we assume the environment has the model and we might need to adjust how Presidio loads it if it's not standard 'en'.
+        # However, standard Presidio usage relies on 'en' mapping to loaded spacy model.
+        # If we want to force a specific spacy model, we can configure the NlpEngine.
+
+        from presidio_analyzer.nlp_engine import NlpEngineProvider
+
+        nlp_configuration = {
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "en", "model_name": model_name}],
+        }
+
+        provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
+        nlp_engine = provider.create_engine()
+
+        self.analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
         self.anonymizer = AnonymizerEngine()
         self.reload_config()
 
@@ -104,6 +126,7 @@ class DLPEngine:
 
         self.ml_enabled = config.get("dlp.ml_enabled", True)
         self.ml_threshold = config.get("dlp.ml_threshold", 0.5)
+        self.entities = config.get("dlp.entities")
         self.replacement_token = config.get("dlp.replacement_token", "[REDACTED]")
 
     def redact(self, text: str) -> Tuple[str, Dict[str, int]]:
@@ -127,7 +150,7 @@ class DLPEngine:
             return text_after_static, stats
 
         # 2. ML Redaction
-        results = self.analyzer.analyze(text=text_after_static, language='en')
+        results = self.analyzer.analyze(text=text_after_static, language='en', entities=self.entities)
 
         # Filter by threshold
         results = [r for r in results if r.score >= self.ml_threshold]

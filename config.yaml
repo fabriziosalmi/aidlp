@@ -8,6 +8,10 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
+  # NLP Model to use (en_core_web_lg, en_core_web_md, en_core_web_sm)
+  nlp_model: "en_core_web_sm"
+  # List of entities to detect (null = all). Example: ["PERSON", "PHONE_NUMBER"]
+  entities: null
   secrets_provider:
     type: "file" # or "vault"
     vault:

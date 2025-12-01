@@ -7,6 +7,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download en_core_web_lg
+RUN python -m spacy download en_core_web_sm
 
 COPY . .
 
@@ -14,4 +15,4 @@ COPY . .
 EXPOSE 8080
 
 # Default command
-CMD ["python", "src/cli.py", "start"]
+CMD ["python", "-m", "src.cli", "start"]
