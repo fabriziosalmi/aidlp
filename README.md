@@ -29,7 +29,9 @@ For HTTPS, you must install the `mitmproxy` CA certificate on the client.
 
 ## Demo
 
-You can record a demo using `asciinema` and the provided scenario script:
+[![asciicast](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz.svg)](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz)
+
+You can record a new demo using `asciinema` and the provided scenario script:
 
 ```bash
 asciinema rec -c "bash demo_scenario.sh" demo.cast
