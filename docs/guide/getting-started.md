@@ -7,20 +7,43 @@
 
 ## Installation
 
-### Local
+### Local Setup
 
-```bash
-git clone https://github.com/fabriziosalmi/aidlp.git
-cd aidlp
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python -m spacy download en_core_web_lg
-python src/cli.py start
-```
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/fabriziosalmi/aidlp.git
+    cd aidlp
+    ```
 
-### Docker
+2.  **Create a virtual environment**:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
 
-```bash
-docker-compose up --build -d
-```
+3.  **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    python -m spacy download en_core_web_lg
+    ```
+
+4.  **Start the proxy**:
+    ```bash
+    # Ensure src is in python path
+    export PYTHONPATH=$PYTHONPATH:$(pwd)
+    python src/cli.py start
+    ```
+
+    The proxy will start on port `8080` (traffic) and `9090` (metrics).
+
+### Docker Setup
+
+1.  **Build and Run**:
+    ```bash
+    docker-compose up --build -d
+    ```
+
+2.  **Verify**:
+    ```bash
+    curl -x http://localhost:8080 http://httpbin.org/ip
+    ```

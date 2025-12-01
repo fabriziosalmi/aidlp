@@ -20,6 +20,19 @@ export default defineConfig({
                 ]
             },
             {
+                text: 'Core Concepts',
+                items: [
+                    { text: 'Redaction Engine', link: '/concepts/redaction' },
+                    { text: 'Secrets Management', link: '/concepts/secrets' }
+                ]
+            },
+            {
+                text: 'Configuration',
+                items: [
+                    { text: 'Reference', link: '/reference/config' }
+                ]
+            },
+            {
                 text: 'Project Info',
                 items: [
                     { text: 'Contributing', link: '/CONTRIBUTING' },

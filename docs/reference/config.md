@@ -1,55 +1,49 @@
 # Configuration Reference
 
-The AI DLP Proxy is configured via a `config.yaml` file. Below is the reference for all available configuration options.
+The AI DLP Proxy is configured via a `config.yaml` file located in the root directory.
 
-## Proxy Settings
-
-Configuration for the proxy server listener.
+## Structure
 
 ```yaml
 proxy:
-  port: 8080          # Port to listen on
-  host: 0.0.0.0       # Interface to bind to
-  ssl_bump: true      # Enable SSL interception (requires CA certificate)
-  metrics_port: 9090  # Port for Prometheus metrics
+  # ... network settings ...
+dlp:
+  # ... engine settings ...
+upstream:
+  # ... forwarding settings ...
 ```
+
+## Proxy Settings
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `port` | `int` | `8080` | The TCP port where the proxy listens for incoming connections. |
+| `host` | `string` | `0.0.0.0` | The interface to bind to. `0.0.0.0` listens on all interfaces. |
+| `ssl_bump` | `bool` | `true` | Enables HTTPS interception. Requires CA cert installation on clients. |
+| `metrics_port` | `int` | `9090` | Port for the Prometheus metrics server. |
 
 ## DLP Settings
 
-Configuration for the Data Loss Prevention engine.
-
-```yaml
-dlp:
-  # Path to file containing static terms to redact (one per line)
-  static_terms_file: "terms.txt"
-
-  # Enable Machine Learning based redaction (Presidio)
-  ml_enabled: true
-
-  # Confidence threshold for ML entities (0.0 to 1.0)
-  ml_threshold: 0.5
-
-  # Replacement string for redacted content
-  replacement_token: "[REDACTED]"
-
-  # Secrets Provider Configuration
-  secrets_provider:
-    # Type of provider: "file" or "vault"
-    type: "file"
-
-    # Vault Configuration (only used if type is "vault")
-    vault:
-      url: "http://localhost:8200"
-      token: "" # Can also be set via VAULT_TOKEN env var
-      path: "aidlp/terms"
-```
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `static_terms_file` | `string` | `terms.txt` | Path to the file containing static keywords. Ignored if provider is `vault`. |
+| `ml_enabled` | `bool` | `true` | Enables the ML-based PII detection engine (Presidio). |
+| `ml_threshold` | `float` | `0.5` | Confidence threshold (0.0-1.0). Higher values reduce false positives but may miss some PII. |
+| `replacement_token` | `string` | `[REDACTED]` | The string used to replace sensitive data. |
+| `secrets_provider.type` | `string` | `file` | Source of static terms. Options: `file`, `vault`. |
+| `secrets_provider.vault.url` | `string` | - | URL of the Vault server (e.g., `http://localhost:8200`). |
+| `secrets_provider.vault.path` | `string` | - | Path to the KV secret (e.g., `aidlp/terms`). |
+| `secrets_provider.vault.token` | `string` | - | Vault token. **Recommended:** Use `VAULT_TOKEN` env var instead. |
 
 ## Upstream Settings
 
-Configuration for upstream forwarding.
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `default_scheme` | `string` | `https` | Default protocol for upstream requests if not specified. |
 
-```yaml
-upstream:
-  # Default scheme to use when forwarding requests
-  default_scheme: "https"
-```
+## Environment Variables
+
+Sensitive configuration can be overridden via environment variables:
+
+- `VAULT_TOKEN`: Authentication token for HashiCorp Vault.
+- `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`: Used in CI/CD for publishing images.
