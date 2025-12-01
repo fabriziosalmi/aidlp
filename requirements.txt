@@ -7,3 +7,4 @@ pyyaml
 spacy
 prometheus-client
 python-json-logger
+hvac

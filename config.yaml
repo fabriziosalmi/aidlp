@@ -8,6 +8,12 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
+  secrets_provider:
+    type: "file" # or "vault"
+    vault:
+      url: "http://localhost:8200"
+      token: "" # Set via VAULT_TOKEN env var
+      path: "aidlp/terms"
   replacement_token: "[REDACTED]"
 
 upstream:

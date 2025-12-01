@@ -1,11 +1,15 @@
 # AI DLP Proxy
 
-![CI](https://github.com/yourusername/aidlp/actions/workflows/ci.yml/badge.svg)
-![Docker](https://github.com/yourusername/aidlp/actions/workflows/docker.yml/badge.svg)
+![CI](https://github.com/fabriziosalmi/aidlp/actions/workflows/ci.yml/badge.svg)
+![Docker](https://github.com/fabriziosalmi/aidlp/actions/workflows/docker.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 
 A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy designed to sanitize sensitive information before it reaches external LLM endpoints.
+
+> 📘 **Documentation**
+>
+> Full documentation is available at [https://fabriziosalmi.github.io/aidlp/](https://fabriziosalmi.github.io/aidlp/) (or locally via `npm run docs:dev`).
 
 ## Table of Contents
 
@@ -59,7 +63,7 @@ The system is built on top of `mitmproxy`'s robust core, extended with a custom 
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/yourusername/aidlp.git
+    git clone https://github.com/fabriziosalmi/aidlp.git
     cd aidlp
     ```
 
