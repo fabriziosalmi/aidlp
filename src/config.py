@@ -2,6 +2,7 @@ import yaml
 import os
 from typing import Dict, Any
 
+
 class ConfigLoader:
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = config_path
@@ -26,6 +27,7 @@ class ConfigLoader:
 
     def reload(self):
         self._config = self._load_config()
+
 
 # Global instance
 config = ConfigLoader()
