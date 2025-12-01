@@ -47,7 +47,7 @@ ACTIVE_CONNECTIONS = Gauge(
 
 
 class StatsManager:
-    def __init__(self, stats_file="stats.json", flush_interval=1):
+    def __init__(self, stats_file="stats.json", flush_interval=60):
         self.stats_file = stats_file
         self.flush_interval = flush_interval
         self.current_stats = {
@@ -213,6 +213,11 @@ class DLPAddon:
 
     def response(self, flow: http.HTTPFlow):
         pass
+
+    def done(self):
+        logger.info("Shutting down DLP Proxy...")
+        self.stats_manager.flush()
+        logger.info("Stats flushed.")
 
 
 addons = [

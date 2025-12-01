@@ -23,6 +23,10 @@ WORKDIR /app
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
+# Create a non-root user
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+
 COPY . .
 
 # Expose proxy port
