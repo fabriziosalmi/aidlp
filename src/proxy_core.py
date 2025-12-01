@@ -17,6 +17,9 @@ logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
 
+# Silence Presidio warnings
+logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
+
 # Prometheus Metrics
 REQUESTS_TOTAL = Counter('dlp_requests_total', 'Total number of DLP requests processed')
 REDACTED_TOTAL = Counter('dlp_redacted_total', 'Total number of requests redacted')

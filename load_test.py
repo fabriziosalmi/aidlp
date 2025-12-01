@@ -25,7 +25,9 @@ async def load_test(num_clients, duration, proxy_url, target_url):
     latencies = []
     start_test = time.time()
     
-    async with aiohttp.ClientSession() as session:
+    # Increase connection limit for high concurrency
+    connector = aiohttp.TCPConnector(limit=num_clients + 100)
+    async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         while time.time() - start_test < duration:
             # Batch of requests
@@ -97,7 +99,7 @@ if __name__ == "__main__":
             return None
 
     # Patching the function for the loop
-    global send_request
+    # global send_request
     send_request = send_request_with_proxy
     
     asyncio.run(load_test(args.clients, args.duration, "http://localhost:8081", "http://httpbin.org/post"))

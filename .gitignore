@@ -5,3 +5,4 @@ __pycache__/
 stats.json
 proxy.log
 *.cast
+proxy_load*.log
