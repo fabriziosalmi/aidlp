@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "AI DLP Proxy Documentation (v1.9.4)"
+  name: "AI DLP Proxy Documentation"
   text: "Secure Gateway for LLMs"
   tagline: "Prevent data leaks with hybrid Static + ML redaction."
   actions:
