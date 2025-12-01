@@ -50,8 +50,15 @@ def stats():
         
     typer.echo("DLP Proxy Stats:")
     typer.echo(f"  Total Requests Redacted: {data.get('total_redacted', 0)}")
+    typer.echo(f"  Active Connections: {data.get('active_connections', 0)}")
     typer.echo(f"  Static Replacements: {data.get('static_replacements', 0)}")
     typer.echo(f"  ML Replacements: {data.get('ml_replacements', 0)}")
+    
+    upstream_hosts = data.get('upstream_hosts', {})
+    if upstream_hosts:
+        typer.echo("  Upstream Hosts:")
+        for host, count in upstream_hosts.items():
+            typer.echo(f"    - {host}: {count}")
     
     total_time = data.get('total_time', 0)
     total_reqs = data.get('total_requests', 0)

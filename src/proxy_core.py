@@ -20,7 +20,9 @@ class StatsManager:
             "total_redacted": 0,
             "static_replacements": 0,
             "ml_replacements": 0,
-            "total_time": 0
+            "total_time": 0,
+            "active_connections": 0,
+            "upstream_hosts": {}
         }
         self.last_flush = time.time()
         self._load_stats()
@@ -35,15 +37,28 @@ class StatsManager:
             except Exception as e:
                 logger.error(f"Failed to load stats: {e}")
 
-    def update(self, request_stats: dict, duration: float):
+    def update(self, request_stats: dict, duration: float, upstream_host: str = None):
         self.current_stats["total_requests"] += 1
         self.current_stats["total_redacted"] += 1
         self.current_stats["static_replacements"] += request_stats.get("static_replacements", 0)
         self.current_stats["ml_replacements"] += request_stats.get("ml_replacements", 0)
         self.current_stats["total_time"] += duration
         
+        if upstream_host:
+            if upstream_host not in self.current_stats["upstream_hosts"]:
+                self.current_stats["upstream_hosts"][upstream_host] = 0
+            self.current_stats["upstream_hosts"][upstream_host] += 1
+        
         if time.time() - self.last_flush > self.flush_interval:
             self.flush()
+
+    def increment_active(self):
+        self.current_stats["active_connections"] += 1
+        # Optional: flush on change if we want real-time "active" view, but interval is fine
+
+    def decrement_active(self):
+        if self.current_stats["active_connections"] > 0:
+            self.current_stats["active_connections"] -= 1
 
     def flush(self):
         try:
@@ -71,6 +86,7 @@ class DLPAddon:
             asyncio.create_task(self.process_request(flow))
 
     async def process_request(self, flow: http.HTTPFlow):
+        self.stats_manager.increment_active()
         try:
             content_str = flow.request.get_text()
             if content_str:
@@ -84,9 +100,11 @@ class DLPAddon:
                 if redacted_content != content_str:
                     flow.request.set_text(redacted_content)
                     logger.info(f"Redacted request to {flow.request.pretty_url}: {stats}")
-                    self.stats_manager.update(stats, duration)
+                    self.stats_manager.update(stats, duration, upstream_host=flow.request.host)
         except Exception as e:
             logger.error(f"Error redacting request: {e}")
+        finally:
+            self.stats_manager.decrement_active()
 
     def response(self, flow: http.HTTPFlow):
         pass

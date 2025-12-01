@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import List, Tuple, Dict
 from flashtext import KeywordProcessor
 from presidio_analyzer import AnalyzerEngine
@@ -19,7 +20,26 @@ class DLPEngine:
     def reload_config(self):
         # Reload static terms
         self.keyword_processor = KeywordProcessor()
-        static_terms = config.get("dlp.static_terms", [])
+        
+        # Load from file if specified, otherwise fallback or empty
+        terms_file = config.get("dlp.static_terms_file", "terms.txt")
+        static_terms = []
+        
+        if os.path.exists(terms_file):
+            try:
+                with open(terms_file, "r") as f:
+                    static_terms = [line.strip() for line in f if line.strip()]
+            except Exception as e:
+                logger.error(f"Failed to load static terms from {terms_file}: {e}")
+        else:
+            # Create default if not exists (auto-creation as requested)
+            try:
+                with open(terms_file, "w") as f:
+                    f.write("password\nsecret\napi_key\n")
+                static_terms = ["password", "secret", "api_key"]
+            except:
+                pass
+
         for term in static_terms:
             self.keyword_processor.add_keyword(term, config.get("dlp.replacement_token", "[REDACTED]"))
         

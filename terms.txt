@@ -1,0 +1,6 @@
+password
+secret
+api_key
+access_token
+private_key
+supersecretterm

@@ -4,10 +4,7 @@ proxy:
   ssl_bump: true
 
 dlp:
-  static_terms:
-    - "password"
-    - "secret"
-    - "api_key"
+  static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
   replacement_token: "[REDACTED]"

@@ -1,0 +1,53 @@
+Starting DLP Proxy on port 8082...
+/Users/fab/Documents/git/aidlp/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+[09:21:18.525] Loading script src/proxy_core.py
+[09:21:18.819] nlp_engine not provided, creating default.
+[09:21:19.293] Created NLP engine: spacy. Loaded models: ['en']
+[09:21:19.293] registry not provided, creating default.
+[09:21:19.299] Loaded recognizer: CreditCardRecognizer
+[09:21:19.299] Loaded recognizer: CreditCardRecognizer
+[09:21:19.299] Loaded recognizer: CreditCardRecognizer
+[09:21:19.299] Loaded recognizer: CreditCardRecognizer
+[09:21:19.299] Loaded recognizer: UsBankRecognizer
+[09:21:19.299] Loaded recognizer: UsLicenseRecognizer
+[09:21:19.299] Loaded recognizer: UsItinRecognizer
+[09:21:19.299] Loaded recognizer: UsPassportRecognizer
+[09:21:19.299] Loaded recognizer: UsSsnRecognizer
+[09:21:19.299] Loaded recognizer: NhsRecognizer
+[09:21:19.299] Loaded recognizer: EsNifRecognizer
+[09:21:19.299] Loaded recognizer: EsNieRecognizer
+[09:21:19.299] Loaded recognizer: ItDriverLicenseRecognizer
+[09:21:19.299] Loaded recognizer: ItFiscalCodeRecognizer
+[09:21:19.299] Loaded recognizer: ItVatCodeRecognizer
+[09:21:19.299] Loaded recognizer: ItIdentityCardRecognizer
+[09:21:19.300] Loaded recognizer: ItPassportRecognizer
+[09:21:19.300] Loaded recognizer: PlPeselRecognizer
+[09:21:19.300] Loaded recognizer: CryptoRecognizer
+[09:21:19.300] Loaded recognizer: DateRecognizer
+[09:21:19.300] Loaded recognizer: EmailRecognizer
+[09:21:19.300] Loaded recognizer: IbanRecognizer
+[09:21:19.300] Loaded recognizer: IpRecognizer
+[09:21:19.300] Loaded recognizer: MedicalLicenseRecognizer
+[09:21:19.300] Loaded recognizer: PhoneRecognizer
+[09:21:19.300] Loaded recognizer: UrlRecognizer
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: es, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: pl, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - EsNifRecognizer supported languages: es, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - EsNieRecognizer supported languages: es, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - ItDriverLicenseRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - ItFiscalCodeRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - ItVatCodeRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - ItIdentityCardRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - ItPassportRecognizer supported languages: it, registry supported languages: en
+[09:21:19.300] Recognizer not added to registry because language is not supported by registry - PlPeselRecognizer supported languages: pl, registry supported languages: en
+[09:21:19.300] Loaded recognizer: SpacyRecognizer
+[09:21:19.300] DLP Engine initialized
+[09:21:19.303] HTTP(S) proxy listening at *:8082.
+[09:21:21.362][[::1]:54583] client connect
+[09:21:21.364] Fetching all recognizers for language en
+[09:21:21.459][[::1]:54583] server connect httpbin.org:80 (127.0.0.1:10011)
+[09:21:21.460] Redacted request to http://httpbin.org/post: {'static_replacements': 1, 'ml_replacements': 0}
+[::1]:54583: POST http://httpbin.org/post
+          << 200 OK 480b
