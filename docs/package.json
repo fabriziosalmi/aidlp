@@ -1,6 +1,6 @@
 {
     "name": "aidlp-docs",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "description": "Documentation for AI DLP Proxy",
     "scripts": {
         "docs:dev": "vitepress dev docs",
