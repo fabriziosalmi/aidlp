@@ -1,0 +1,49 @@
+Starting DLP Proxy on port 8081...
+/Users/fab/Documents/git/aidlp/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+{"asctime": "2025-12-01 09:24:07,241", "levelname": "ERROR", "message": "Failed to start Prometheus server: [Errno 48] Address already in use"}
+{"asctime": "2025-12-01 09:24:07,241", "levelname": "INFO", "message": "DLP Engine initialized"}
+[09:24:06.112] Loading script src/proxy_core.py
+[09:24:06.507] nlp_engine not provided, creating default.
+[09:24:07.230] Created NLP engine: spacy. Loaded models: ['en']
+[09:24:07.231] registry not provided, creating default.
+[09:24:07.239] Loaded recognizer: CreditCardRecognizer
+[09:24:07.239] Loaded recognizer: CreditCardRecognizer
+[09:24:07.239] Loaded recognizer: CreditCardRecognizer
+[09:24:07.239] Loaded recognizer: CreditCardRecognizer
+[09:24:07.239] Loaded recognizer: UsBankRecognizer
+[09:24:07.239] Loaded recognizer: UsLicenseRecognizer
+[09:24:07.239] Loaded recognizer: UsItinRecognizer
+[09:24:07.239] Loaded recognizer: UsPassportRecognizer
+[09:24:07.239] Loaded recognizer: UsSsnRecognizer
+[09:24:07.239] Loaded recognizer: NhsRecognizer
+[09:24:07.239] Loaded recognizer: EsNifRecognizer
+[09:24:07.239] Loaded recognizer: EsNieRecognizer
+[09:24:07.239] Loaded recognizer: ItDriverLicenseRecognizer
+[09:24:07.239] Loaded recognizer: ItFiscalCodeRecognizer
+[09:24:07.239] Loaded recognizer: ItVatCodeRecognizer
+[09:24:07.239] Loaded recognizer: ItIdentityCardRecognizer
+[09:24:07.239] Loaded recognizer: ItPassportRecognizer
+[09:24:07.239] Loaded recognizer: PlPeselRecognizer
+[09:24:07.239] Loaded recognizer: CryptoRecognizer
+[09:24:07.239] Loaded recognizer: DateRecognizer
+[09:24:07.240] Loaded recognizer: EmailRecognizer
+[09:24:07.240] Loaded recognizer: IbanRecognizer
+[09:24:07.240] Loaded recognizer: IpRecognizer
+[09:24:07.240] Loaded recognizer: MedicalLicenseRecognizer
+[09:24:07.240] Loaded recognizer: PhoneRecognizer
+[09:24:07.240] Loaded recognizer: UrlRecognizer
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: es, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - CreditCardRecognizer supported languages: pl, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - EsNifRecognizer supported languages: es, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - EsNieRecognizer supported languages: es, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - ItDriverLicenseRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - ItFiscalCodeRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - ItVatCodeRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - ItIdentityCardRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - ItPassportRecognizer supported languages: it, registry supported languages: en
+[09:24:07.240] Recognizer not added to registry because language is not supported by registry - PlPeselRecognizer supported languages: pl, registry supported languages: en
+[09:24:07.240] Loaded recognizer: SpacyRecognizer
+[09:24:07.241] Failed to start Prometheus server: [Errno 48] Address already in use
+[09:24:07.241] DLP Engine initialized

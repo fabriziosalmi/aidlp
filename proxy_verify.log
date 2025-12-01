@@ -51,3 +51,4 @@ Starting DLP Proxy on port 8082...
 [09:21:21.460] Redacted request to http://httpbin.org/post: {'static_replacements': 1, 'ml_replacements': 0}
 [::1]:54583: POST http://httpbin.org/post
           << 200 OK 480b
+{"asctime": "2025-12-01 09:23:23,968", "levelname": "INFO", "message": "DLP Engine initialized"}
