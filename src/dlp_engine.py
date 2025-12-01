@@ -107,7 +107,11 @@ class DLPEngine:
         self.replacement_token = config.get("dlp.replacement_token", "[REDACTED]")
 
     def redact(self, text: str) -> Tuple[str, Dict[str, int]]:
-        stats = {"static_replacements": 0, "ml_replacements": 0}
+        stats = {
+            "static_replacements": 0,
+            "ml_replacements": 0,
+            "pii_types": {}
+        }
 
         # 1. Static Redaction (Fastest)
         # Flashtext replaces in-place or returns new string.
@@ -128,6 +132,11 @@ class DLPEngine:
         # Filter by threshold
         results = [r for r in results if r.score >= self.ml_threshold]
         stats["ml_replacements"] = len(results)
+
+        # Count PII types
+        for r in results:
+            entity_type = r.entity_type
+            stats["pii_types"][entity_type] = stats["pii_types"].get(entity_type, 0) + 1
 
         # Define anonymizer operators
         operators = {

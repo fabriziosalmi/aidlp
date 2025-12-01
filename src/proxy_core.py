@@ -23,7 +23,9 @@ logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)
 # Prometheus Metrics
 REQUESTS_TOTAL = Counter('dlp_requests_total', 'Total number of DLP requests processed')
 REDACTED_TOTAL = Counter('dlp_redacted_total', 'Total number of requests redacted')
-LATENCY = Histogram('dlp_latency_seconds', 'Time spent processing DLP requests')
+PII_DETECTED_TOTAL = Counter('dlp_pii_detected_total', 'Total number of PII entities detected', ['type'])
+TOKEN_USAGE_TOTAL = Counter('dlp_token_usage_total', 'Estimated token usage', ['direction'])
+LATENCY = Histogram('dlp_latency_seconds', 'Time spent processing DLP requests', buckets=[.005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0])
 ACTIVE_CONNECTIONS = Gauge('dlp_active_connections', 'Number of currently active connections')
 
 
@@ -131,11 +133,28 @@ class DLPAddon:
 
                 duration = time.time() - start_time
 
+                # Token Usage Estimation (Input)
+                input_tokens = len(content_str) / 4
+                TOKEN_USAGE_TOTAL.labels(direction='input').inc(input_tokens)
+
                 if redacted_content != content_str:
                     flow.request.set_text(redacted_content)
                     REDACTED_TOTAL.inc()
+
+                    # Token Usage Estimation (Output - if changed)
+                    output_tokens = len(redacted_content) / 4
+                    TOKEN_USAGE_TOTAL.labels(direction='output').inc(output_tokens)
+
+                    # PII Metrics
+                    if "pii_types" in stats:
+                        for pii_type, count in stats["pii_types"].items():
+                            PII_DETECTED_TOTAL.labels(type=pii_type).inc(count)
+
                     logger.info("Redacted request", extra={"url": flow.request.pretty_url, "stats": stats})
                     self.stats_manager.update(stats, duration, upstream_host=flow.request.host)
+                else:
+                    # No redaction, output tokens = input tokens
+                    TOKEN_USAGE_TOTAL.labels(direction='output').inc(input_tokens)
         except Exception as e:
             logger.error("Error redacting request", extra={"error": str(e)})
         finally:
