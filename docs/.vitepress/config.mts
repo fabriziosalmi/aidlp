@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
     title: "AI DLP Proxy",
     description: "Secure LLM Gateway with Data Loss Prevention",
+    base: '/aidlp/',
     themeConfig: {
         nav: [
             { text: 'Home', link: '/' },
