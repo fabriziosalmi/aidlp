@@ -40,5 +40,7 @@ The brain of the operation. It uses a hybrid approach:
 - **Static Analysis**: Uses `FlashText` for O(1) keyword replacement. Ideal for known secrets (API keys, internal codenames).
 - **ML Analysis**: Uses `Microsoft Presidio` and `SpaCy` for Named Entity Recognition (NER). Detects dynamic PII like names, locations, and phone numbers.
 
-### 3. Async Processing
-To minimize latency, the DLP analysis runs in a separate thread pool (`asyncio.to_thread`). This ensures that the main event loop remains responsive, handling thousands of concurrent connections.
+### 3. Async Processing & Safety
+To ensure data safety, the proxy uses a **Fail Closed** model. The main request loop `awaits` the DLP analysis, blocking the request until it is fully sanitized. If the DLP engine fails or times out, the request is rejected (HTTP 500) to prevent data leakage.
+
+However, non-critical operations like metrics collection and file I/O (`StatsManager`) are offloaded to separate threads (`asyncio.to_thread`) to prevent blocking the main event loop.

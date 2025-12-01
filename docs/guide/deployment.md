@@ -4,7 +4,7 @@ Strategies for deploying AI DLP Proxy in production environments.
 
 ## Docker Compose
 
-For a complete stack including Prometheus and Grafana (optional), use Docker Compose.
+For a complete stack including Prometheus and Grafana (optional), use Docker Compose. The image uses a **multi-stage build** based on `python:3.12-slim` for minimal size and maximum security.
 
 ```yaml
 version: '3.8'

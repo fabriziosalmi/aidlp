@@ -3,7 +3,7 @@
 ![CI](https://github.com/fabriziosalmi/aidlp/actions/workflows/ci.yml/badge.svg)
 ![Docker](https://github.com/fabriziosalmi/aidlp/actions/workflows/docker.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 
 A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy designed to sanitize sensitive information before it reaches external LLM endpoints.
 
@@ -40,7 +40,8 @@ The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM provi
 - **SSL/TLS Interception**: Full support for HTTPS traffic inspection via `mitmproxy` core.
 - **High Performance**: Asynchronous ML processing with configurable models (`en_core_web_sm` for speed) ensures minimal latency impact.
 - **Enterprise Observability**: Native Prometheus metrics (`/metrics`) and structured JSON logging for integration with Grafana/Loki.
-- **Scalable**: Dockerized and load-tested to handle 1000+ concurrent connections.
+- **Fail Closed Security**: Requests are strictly blocked (500 Error) if the DLP engine encounters any failure, ensuring no data leakage.
+- **Scalable**: Dockerized (Multi-stage build, Python 3.12) and load-tested to handle 1000+ concurrent connections.
 
 ## Architecture
 
@@ -56,7 +57,7 @@ The system is built on top of `mitmproxy`'s robust core, extended with a custom 
 
 ## Prerequisites
 
-- **Python**: 3.9 or higher.
+- **Python**: 3.12 or higher.
 - **Docker**: 20.10+ (for containerized deployment).
 - **Memory**: Minimum 2GB RAM recommended for ML models.
 
@@ -79,7 +80,7 @@ The system is built on top of `mitmproxy`'s robust core, extended with a custom 
 3.  **Install dependencies**:
     ```bash
     pip install -r requirements.txt
-    python -m spacy download en_core_web_lg
+    pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
     ```
 
 4.  **Start the proxy**:
