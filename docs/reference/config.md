@@ -29,6 +29,8 @@ upstream:
 | `static_terms_file` | `string` | `terms.txt` | Path to the file containing static keywords. Ignored if provider is `vault`. |
 | `ml_enabled` | `bool` | `true` | Enables the ML-based PII detection engine (Presidio). |
 | `ml_threshold` | `float` | `0.5` | Confidence threshold (0.0-1.0). Higher values reduce false positives but may miss some PII. |
+| `nlp_model` | `string` | `en_core_web_lg` | SpaCy model to use. Options: `en_core_web_lg` (accurate), `en_core_web_sm` (fast). |
+| `entities` | `list` | `null` | List of entities to detect (e.g., `["PERSON", "EMAIL_ADDRESS"]`). `null` detects all supported types. |
 | `replacement_token` | `string` | `[REDACTED]` | The string used to replace sensitive data. |
 | `secrets_provider.type` | `string` | `file` | Source of static terms. Options: `file`, `vault`. |
 | `secrets_provider.vault.url` | `string` | - | URL of the Vault server (e.g., `http://localhost:8200`). |

@@ -38,7 +38,7 @@ The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM provi
 
 - **Hybrid Redaction Engine**: Combines the speed of static keyword matching (FlashText) with the intelligence of NLP models (Presidio/SpaCy) to detect PII, secrets, and custom terms.
 - **SSL/TLS Interception**: Full support for HTTPS traffic inspection via `mitmproxy` core.
-- **High Performance**: Asynchronous ML processing ensures minimal latency impact (<30ms overhead at P95).
+- **High Performance**: Asynchronous ML processing with configurable models (`en_core_web_sm` for speed) ensures minimal latency impact.
 - **Enterprise Observability**: Native Prometheus metrics (`/metrics`) and structured JSON logging for integration with Grafana/Loki.
 - **Scalable**: Dockerized and load-tested to handle 1000+ concurrent connections.
 
@@ -115,6 +115,8 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
+  nlp_model: "en_core_web_lg" # or "en_core_web_sm" for speed
+  entities: ["PERSON", "PHONE_NUMBER"] # Optional: filter specific entities
   secrets_provider:
     type: "file" # or "vault"
     vault:
