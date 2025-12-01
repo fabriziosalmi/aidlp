@@ -6,3 +6,5 @@ stats.json
 proxy.log
 *.cast
 proxy_load*.log
+proxy_verify.log
+proxy_obs.log
