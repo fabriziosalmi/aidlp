@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-12-01
+### Added
+- **Metrics**: Enhanced Prometheus metrics:
+    - `dlp_pii_detected_total`: Count of PII entities by type.
+    - `dlp_token_usage_total`: Estimated token usage (input/output).
+    - `dlp_latency_seconds`: Improved histogram buckets for p95 calculation.
+
 ## [1.4.0] - 2025-12-01
 ### Fixed
 - **Docker Build**: Switched base image to `python:3.9` to resolve missing build dependencies.

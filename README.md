@@ -7,6 +7,9 @@
 
 A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy designed to sanitize sensitive information before it reaches external LLM endpoints.
 
+### Demo
+[![asciicast](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz.svg)](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz)
+
 > 📘 **Documentation**
 >
 > Full documentation is available at [https://fabriziosalmi.github.io/aidlp/](https://fabriziosalmi.github.io/aidlp/) (or locally via `npm run docs:dev`).
@@ -138,9 +141,6 @@ curl -x http://localhost:8080 \
   "data": "My password is [REDACTED]"
 }
 ```
-
-### Demo
-[![asciicast](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz.svg)](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz)
 
 ## Observability
 

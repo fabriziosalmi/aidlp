@@ -9,3 +9,4 @@ proxy_load*.log
 proxy_verify.log
 proxy_obs.log
 commits.txt
+proxy.pid
