@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2025-12-01
+### Added
+- **Documentation**: Comprehensive overhaul:
+    - New **Core Concepts** section (Redaction Engine, Secrets Management).
+    - Detailed **Configuration Reference**.
+    - Enhanced **Getting Started** guide for local usage.
+
 ## [1.5.0] - 2025-12-01
 ### Added
 - **Metrics**: Enhanced Prometheus metrics:
