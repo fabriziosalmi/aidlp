@@ -18,6 +18,8 @@ features:
     details: Combines fast static keyword matching with intelligent ML-based PII detection.
   - title: Enterprise Ready
     details: Dockerized, scalable, and observable with Prometheus metrics and JSON logs.
+  - title: Vault Integration
+    details: Securely manage static redaction terms using HashiCorp Vault.
   - title: SSL Interception
     details: Full HTTPS inspection support using mitmproxy core.
 ---

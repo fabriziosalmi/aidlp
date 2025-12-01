@@ -115,6 +115,11 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
+  secrets_provider:
+    type: "file" # or "vault"
+    vault:
+      url: "http://localhost:8200"
+      path: "aidlp/terms"
 ```
 
 ### `terms.txt`
@@ -148,6 +153,8 @@ curl -x http://localhost:8080 \
 Prometheus metrics are available at `http://localhost:9090/metrics`.
 - `dlp_requests_total`: Total requests processed.
 - `dlp_redacted_total`: Requests containing sensitive data.
+- `dlp_pii_detected_total`: Count of PII entities by type (e.g., `EMAIL`, `PHONE_NUMBER`).
+- `dlp_token_usage_total`: Estimated token usage (input/output).
 - `dlp_latency_seconds`: Histogram of processing time.
 - `dlp_active_connections`: Current active connections.
 
