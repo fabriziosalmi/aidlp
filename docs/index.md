@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "AI DLP Proxy"
   text: "Secure Gateway for LLMs"
-  tagline: "Prevent data leaks with hybrid Static + ML redaction and Vault Integration"
+  tagline: "Prevent data leaks with hybrid static + ML redaction and vault integration"
   actions:
     - theme: brand
       text: Get Started
