@@ -3,7 +3,9 @@ FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y build-essential curl
+RUN rm -rf /var/lib/apt/lists/* && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends --fix-missing build-essential curl
 
 # Install Poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
