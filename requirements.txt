@@ -18,7 +18,7 @@ colorama==0.4.6 ; python_version >= "3.12" and python_version < "4.0" and (sys_p
 confection==0.1.5 ; python_version >= "3.12" and python_version < "4.0"
 cryptography==45.0.7 ; python_version >= "3.12" and python_version < "4.0"
 cymem==2.0.11 ; python_version >= "3.12" and python_version < "4.0"
-filelock==3.20.0 ; python_version >= "3.12" and python_version < "4.0"
+filelock==3.20.1 ; python_version >= "3.12" and python_version < "4.0"
 flashtext==2.7 ; python_version >= "3.12" and python_version < "4.0"
 flask==3.0.3 ; python_version >= "3.12" and python_version < "4.0"
 h11==0.16.0 ; python_version >= "3.12" and python_version < "4.0"
