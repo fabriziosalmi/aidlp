@@ -38,19 +38,17 @@ Before you ask a question, it is best to search for existing [Issues](https://gi
 2.  **Clone your fork** locally.
 3.  **Set up the environment**:
     ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    pip install pre-commit
-    pre-commit install
-    python -m spacy download en_core_web_lg
+    python3.12 -m venv .venv
+    source .venv/bin/activate
+    pip install poetry
+    poetry install
+    python -m spacy download en_core_web_sm
     ```
 4.  **Create a branch** for your changes.
 5.  **Make your changes**.
 6.  **Run tests** to ensure nothing is broken:
     ```bash
-    export PYTHONPATH=$PYTHONPATH:$(pwd)
-    pytest tests/
+    poetry run pytest tests/
     ```
 7.  **Commit your changes** (see [Commit Messages](#commit-messages)).
 8.  **Push to your fork** and submit a **Pull Request**.
@@ -60,8 +58,7 @@ Before you ask a question, it is best to search for existing [Issues](https://gi
 ### Code Style
 
 - We use **flake8** for linting.
-- Run `flake8 .` before committing.
-- Pre-commit hooks are configured to automatically check for linting errors.
+- Run `poetry run flake8 .` before committing.
 
 ### Commit Messages
 

@@ -17,7 +17,7 @@ sequenceDiagram
     User->>Proxy: POST /v1/chat/completions (Sensitive Data)
     Proxy->>DLP: Offload Request Analysis
 
-    par Parallel Processing
+    par Sequential Stages
         DLP->>DLP: Check Static Rules (FlashText)
         DLP->>DLP: Check ML Models (Presidio)
     end
@@ -49,9 +49,8 @@ The brain of the operation. It uses a hybrid approach:
 ### 3. Async Processing & Safety
 To ensure data safety, the proxy uses a **Fail Closed** model. The main request loop `awaits` the DLP analysis, blocking the request until it is fully sanitized. If the DLP engine fails or times out, the request is rejected (HTTP 500) to prevent data leakage.
 
-However, non-critical operations like metrics collection and file I/O (`StatsManager`) are offloaded to separate threads (`asyncio.to_thread`) to prevent blocking the main event loop.
+The two redaction stages (static keyword matching, then ML/NER) run **sequentially** within a background thread. The thread is spawned via `asyncio.to_thread` so the main event loop is never blocked, but the redaction itself is synchronous and ordered: static first, ML second.
 
 ### 4. Observability
 To ensure production readiness, the system exposes real-time metrics:
 - **Prometheus**: Scrapes the proxy on port `9090` to collect time-series data (request counts, latency, PII detected).
-- **Grafana**: Visualizes these metrics in a user-friendly dashboard, allowing operators to monitor DLP performance and token usage.

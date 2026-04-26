@@ -3,6 +3,9 @@ import subprocess
 import os
 import requests
 import re
+import yaml
+
+from src.config import config
 
 app = typer.Typer()
 
@@ -24,9 +27,7 @@ def start(port: int = 8080, ssl_bump: bool = True):
     ]
 
     if ssl_bump:
-        # mitmproxy defaults to ssl bump if not specified otherwise, but we can
-        # be explicit or add certs
-        pass
+        cmd.extend(["--ssl-insecure"])
 
     # Set PYTHONPATH so mitmproxy can find src modules
     env = os.environ.copy()
@@ -41,12 +42,10 @@ def start(port: int = 8080, ssl_bump: bool = True):
 @app.command()
 def stats():
     """
-    Show current stats.
-    """
-    """
     Show current stats from Prometheus.
     """
-    metrics_url = "http://localhost:9090"
+    metrics_port = config.get("proxy.metrics_port", 9090)
+    metrics_url = f"http://localhost:{metrics_port}"
     try:
         response = requests.get(metrics_url)
         response.raise_for_status()
@@ -76,12 +75,13 @@ def add_term(term: str):
     """
     Add a static term to the blacklist.
     """
-    # Load raw config to preserve comments if possible, but for now just append
-    # simpler to just append to the list in memory and save
-    import yaml
+    config_path = "config.yaml"
+    if not os.path.exists(config_path):
+        typer.echo(f"Config file '{config_path}' not found.")
+        raise typer.Exit(1)
 
-    with open("config.yaml", "r") as f:
-        data = yaml.safe_load(f)
+    with open(config_path, "r") as f:
+        data = yaml.safe_load(f) or {}
 
     if "dlp" not in data:
         data["dlp"] = {}
@@ -90,7 +90,7 @@ def add_term(term: str):
 
     if term not in data["dlp"]["static_terms"]:
         data["dlp"]["static_terms"].append(term)
-        with open("config.yaml", "w") as f:
+        with open(config_path, "w") as f:
             yaml.dump(data, f)
         typer.echo(f"Added '{term}' to static terms.")
     else:

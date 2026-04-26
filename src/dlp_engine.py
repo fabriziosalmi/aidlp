@@ -1,12 +1,12 @@
 import logging
 import os
-from typing import Tuple, Dict
 from abc import ABC, abstractmethod
 import hvac
 import pybreaker
 
 from flashtext import KeywordProcessor
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
@@ -100,18 +100,6 @@ class DLPEngine:
         model_name = config.get("dlp.nlp_model", "en_core_web_lg")
         logger.info(f"Loading NLP model: {model_name}")
 
-        # Initialize Presidio Analyzer with specific model
-        # Note: Presidio loads 'en' by default which maps to a model.
-        # To support switching, we need to ensure the language config points
-        # to the right model or use a custom configuration.
-        # For simplicity in this setup, we assume the environment has the model
-        # and we might need to adjust how Presidio loads it if it's not
-        # standard 'en'.
-        # However, standard Presidio usage relies on 'en' mapping to loaded
-        # spacy model.
-        # If we want to force a specific spacy model, we can configure the
-        # NlpEngine.
-        from presidio_analyzer.nlp_engine import NlpEngineProvider
         nlp_configuration = {
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "en", "model_name": model_name}],
@@ -162,7 +150,7 @@ class DLPEngine:
         self.replacement_token = config.get(
             "dlp.replacement_token", "[REDACTED]")
 
-    def redact(self, text: str) -> Tuple[str, Dict[str, int]]:
+    def redact(self, text: str) -> tuple[str, dict[str, int]]:
         stats = {
             "static_replacements": 0,
             "ml_replacements": 0,

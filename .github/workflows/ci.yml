@@ -14,11 +14,11 @@ jobs:
         python-version: ['3.12']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
       id: setup-python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -30,7 +30,7 @@ jobs:
 
     - name: Load cached venv
       id: cached-poetry-dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: .venv
         key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
@@ -41,7 +41,7 @@ jobs:
 
     - name: Install SpaCy Model
       run: |
-        poetry run pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
+        poetry run python -m spacy download en_core_web_sm
 
     - name: Lint with flake8
       run: |
@@ -52,5 +52,5 @@ jobs:
 
     - name: Run Unit Tests
       run: |
-        export PYTHONPATH=$PYTHONPATH:$(pwd)
-        poetry run pytest tests/
+        poetry run pip install -q pytest-cov
+        poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60

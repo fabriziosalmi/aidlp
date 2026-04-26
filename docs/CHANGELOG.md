@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-04-26
+### Fixed
+- CI: switched SpaCy model download from `en_core_web_lg` to `en_core_web_sm` to match default config
+- CI: upgraded actions (`actions/checkout@v3` → `v4`, `setup-python@v4` → `v5`, `cache@v3` → `v4`)
+- CI: added `pytest-cov` with `--cov-fail-under=60` coverage gate
+
+### Changed
+- Version bump to 1.9.9
+
+## [1.9.8] - 2026-04-26
+### Fixed
+- Fixed `typer` version pin (upgraded from `0.9.0` to `^0.12.0`) to resolve `TypeError` on boolean flag with Click 8.3.x
+- Fixed `errno.EADDRINUSE` usage (replaced macOS-specific magic number 48 with portable constant)
+- Fixed race condition: removed `self.request_id` instance variable assignment in async request handler
+- Moved `NlpEngineProvider` import from inside `__init__` to module-level
+- Replaced deprecated `typing.Tuple`/`typing.Dict` with native `tuple`/`dict` generics (Python 3.12+)
+
+### Changed
+- `cli.py` `stats` command now reads `metrics_port` from config instead of hardcoding `9090`
+- `cli.py` `start` command now correctly passes `--ssl-insecure` to mitmdump when `ssl_bump=True`
+- `cli.py` `add_term` command now handles missing `config.yaml` gracefully with exit code 1
+- Added `[tool.pytest.ini_options]` with `asyncio_mode = "auto"` and `testpaths = ["tests"]`
+
+### Tests
+- Added `tests/test_cli.py` with 11 tests covering all CLI commands
+- Overall test coverage raised from 68% to 87%
+
 ## [1.9.6] - 2025-12-01
 ### Security
 - **CRITICAL**: Updated `h11` to 0.16.0 (fixed malformed Chunked-Encoding vulnerability)

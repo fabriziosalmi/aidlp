@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.12+
 - Docker (optional)
 
 ## Installation
@@ -25,7 +25,7 @@
     ```bash
     pip install poetry
     poetry install
-    poetry run python -m spacy download en_core_web_lg
+    poetry run python -m spacy download en_core_web_sm
     ```
 
 4.  **Start the proxy**:

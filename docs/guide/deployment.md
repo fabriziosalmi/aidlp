@@ -48,7 +48,9 @@ Securely manage your static sensitive terms using HashiCorp Vault.
 
 2.  **Write Secrets**:
     ```bash
-    vault kv put aidlp/terms data='["secret_project_x", "api_key_123"]'
+    vault kv put aidlp/terms \
+        term1="secret_project_x" \
+        term2="api_key_123"
     ```
 
 3.  **Configure Policy**:

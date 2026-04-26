@@ -1,3 +1,4 @@
+import errno
 import logging
 import os
 import asyncio
@@ -55,7 +56,7 @@ class DLPAddon:
             logger.info(
                 f"Prometheus metrics server started on port {metrics_port}")
         except OSError as e:
-            if e.errno == 48:  # Address already in use
+            if e.errno == errno.EADDRINUSE:
                 logger.error(
                     f"Failed to start Prometheus server on port "
                     f"{metrics_port}: "
@@ -80,10 +81,6 @@ class DLPAddon:
         if not request_id:
             request_id = os.urandom(16).hex()
             flow.request.headers["X-Request-ID"] = request_id
-
-        # Add to context for logging (simple approach, ideally use contextvar)
-        # We will pass it manually to extras
-        self.request_id = request_id
 
         # Health Probe
         if flow.request.path == "/_health" and flow.request.method == "GET":
@@ -125,15 +122,11 @@ class DLPAddon:
         try:
             content_str = flow.request.get_text()
             if content_str:
-                # start_time = time.time()
-
                 # Offload blocking ML call to thread
                 with LATENCY.time():
                     redacted_content, stats = await asyncio.to_thread(
                         self.dlp_engine.redact, content_str
                     )
-
-                # duration = time.time() - start_time
 
                 # Token Usage Estimation (Input)
                 input_tokens = len(content_str) / 4

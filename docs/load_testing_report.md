@@ -13,33 +13,33 @@ We used a custom Python script (`load_test.py`) utilizing `aiohttp` and `asyncio
 
 ## Environment
 - **OS**: macOS
-- **Proxy**: Python 3.9, running via `mitmproxy` logic.
+- **Proxy**: Python 3.12, running via `mitmproxy` logic.
 - **DLP Engine**:
     - Static: FlashText (enabled)
-    - ML: Presidio (enabled, `en_core_web_lg` model)
+    - ML: Presidio (enabled, `en_core_web_sm` model)
     - Async Offloading: Enabled (ML runs in thread pool)
 
 ## Replication Steps
 
 1. **Setup Environment**:
    ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   python -m spacy download en_core_web_lg
+   python3.12 -m venv .venv
+   source .venv/bin/activate
+   pip install poetry
+   poetry install
+   python -m spacy download en_core_web_sm
    ```
 
 2. **Start Proxy**:
    Start the proxy on port 8085 (or any free port).
    ```bash
-   export PYTHONPATH=$PYTHONPATH:$(pwd)
-   python src/cli.py start --port 8085
+   poetry run python -m src.cli start --port 8085
    ```
 
 3. **Run Load Test**:
    In a separate terminal:
    ```bash
-   source venv/bin/activate
+   source .venv/bin/activate
    python load_test.py --clients 1000 --duration 10
    ```
    *Note: Ensure your OS file descriptor limit (`ulimit -n`) is high enough for 1000+ connections.*

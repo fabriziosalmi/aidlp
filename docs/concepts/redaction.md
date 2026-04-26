@@ -13,14 +13,14 @@ The first layer uses **FlashText**, an algorithm optimized for replacing keyword
 - **Performance**: Extremely fast (microseconds), independent of the number of keywords.
 
 ### 2. Machine Learning Redaction (Smart)
-The second layer uses **Microsoft Presidio** (backed by SpaCy `en_core_web_lg`).
+The second layer uses **Microsoft Presidio** (backed by SpaCy `en_core_web_sm` by default).
 - **Purpose**: Detects PII (Personally Identifiable Information) that follows patterns or context, such as:
     - Names
     - Phone Numbers
     - Email Addresses
     - Credit Card Numbers
     - Crypto Wallets
-- **Performance**: Slower than static (milliseconds), but runs asynchronously to minimize impact.
+- **Performance**: Slower than static (milliseconds). The entire redaction pipeline runs in a background thread (`asyncio.to_thread`) so the async event loop is never blocked.
 - **Configuration**:
     - `ml_enabled`: Can be toggled off for maximum speed.
     - `ml_threshold`: Confidence score (0.0 - 1.0) to filter false positives.
