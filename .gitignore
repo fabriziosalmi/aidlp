@@ -1,16 +1,57 @@
-venv/
+# Python
 __pycache__/
-*.pyc
-.DS_Store
-stats.json
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments
+venv/
+env/
+.venv/
+.env
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and PID
+*.log
+*.pid
 proxy.log
-*.cast
 proxy_load*.log
 proxy_verify.log
 proxy_obs.log
+
+# Project specific
+stats.json
+*.cast
 commits.txt
-proxy.pid
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Node.js / Documentation
 node_modules/
-.venv/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
