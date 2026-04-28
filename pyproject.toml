@@ -24,7 +24,7 @@ pydantic-settings = "^2.2.1"
 requests = "^2.31.0"  # Needed for CLI stats fetching
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
+pytest = ">=7.4,<10.0"
 pytest-asyncio = "^0.23.0"
 locust = "^2.20.0"
 flake8 = "^7.3.0"
