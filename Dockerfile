@@ -12,21 +12,21 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry self add poetry-plugin-export
 
-COPY pyproject.toml poetry.lock* ./
+COPY pyproject.toml poetry.lock ./
 
 # Install dependencies to a specific prefix
-# We use export to generate a requirements.txt for pip install to target directory,
-# or we can configure poetry to install to a specific dir.
-# Simpler approach for multi-stage: export to requirements.txt
 RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Install SpaCy models directly to the prefix
-RUN pip install --no-cache-dir --prefix=/install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
+# Install SpaCy models directly to the prefix (Only SM to avoid 800MB bloat)
 RUN pip install --no-cache-dir --prefix=/install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 # Final stage
 FROM python:3.12-slim
+
+# Install dumb-init for proper signal handling
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -37,10 +37,15 @@ COPY --from=builder /install /usr/local
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
-COPY . .
+COPY --chown=appuser:appuser src/ /app/src/
 
 # Expose proxy port
-EXPOSE 8080
+EXPOSE 8080 9090
 
-# Default command
-CMD ["python", "-m", "src.cli", "start"]
+# Ensure Python can find the src module and binaries
+ENV PYTHONPATH="/app"
+ENV PATH="/usr/local/bin:$PATH"
+
+# Default command using dumb-init
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["python", "-m", "src.cli", "start", "--port", "8080"]

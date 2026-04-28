@@ -24,9 +24,9 @@ echo -e "${GREEN}Request Body: '$DEMO_TEXT'${NC}"
 
 # Send request through proxy
 # We use httpbin.org/post to echo back the data received by the server
-curl -x http://localhost:8081 -X POST http://httpbin.org/post \
-     -d "$DEMO_TEXT" \
-     -s | grep -A 5 "form"
+curl -x http://localhost:8081 -H "Content-Type: application/json" -X POST http://httpbin.org/post \
+     -d "{\"prompt\": \"$DEMO_TEXT\"}" \
+     -s | grep -A 5 "json"
 
 echo -e "\n${BLUE}3. Waiting for stats flush...${NC}"
 sleep 2

@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 
 # Add current directory to path
 sys.path.append(os.getcwd())
@@ -7,14 +8,15 @@ sys.path.append(os.getcwd())
 from src.dlp_engine import DLPEngine  # noqa: E402
 
 
-def test_dlp():
+async def test_dlp():
     print("Initializing DLP Engine...")
     engine = DLPEngine()
+    engine.start_workers()
 
     test_text = "My password is secret and my name is John Doe. Contact me at 555-0199."
     print(f"Original: {test_text}")
 
-    redacted, stats = engine.redact(test_text)
+    redacted, stats = await engine.redact(test_text)
     print(f"Redacted: {redacted}")
     print(f"Stats: {stats}")
 
@@ -27,4 +29,4 @@ def test_dlp():
 
 
 if __name__ == "__main__":
-    test_dlp()
+    asyncio.run(test_dlp())

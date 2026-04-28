@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 from mitmproxy.test import tflow
 from src.proxy_core import DLPAddon
 
@@ -8,7 +8,7 @@ from src.proxy_core import DLPAddon
 async def test_dlp_addon_redaction_fail_closed():
     addon = DLPAddon()
     # Mock DLP Engine to fail
-    addon.dlp_engine.redact = MagicMock(side_effect=Exception("DLP Crash"))
+    addon.dlp_engine.redact = AsyncMock(side_effect=Exception("DLP Crash"))
 
     f = tflow.tflow()
     f.request.method = "POST"
@@ -26,7 +26,7 @@ async def test_dlp_addon_redaction_fail_closed():
 async def test_dlp_addon_redaction_success():
     addon = DLPAddon()
     # Mock DLP Engine to return redacted content
-    addon.dlp_engine.redact = MagicMock(return_value=("redacted", {}))
+    addon.dlp_engine.redact = AsyncMock(return_value=("redacted", {}))
 
     f = tflow.tflow()
     f.request.method = "POST"

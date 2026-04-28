@@ -6,21 +6,24 @@ services:
     ports:
       - "8080:8080"
       - "9090:9090" # Expose metrics
-    volumes:
-      - ./config.yaml:/app/config.yaml
     environment:
       - PYTHONUNBUFFERED=1
+      - AIDLP_PROXY__PORT=8080
+      - AIDLP_PROXY__METRICS_PORT=9090
+      - AIDLP_DLP__ML_ENABLED=true
+      - AIDLP_DLP__NLP_MODEL=en_core_web_sm
+      - AIDLP_DLP__SECRETS_PROVIDER__TYPE=file
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
-          memory: 2G
-        reservations:
           memory: 1G
+        reservations:
+          memory: 512M
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.1
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -29,7 +32,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.1
     ports:
       - "3000:3000"
     environment:

@@ -4,28 +4,31 @@ The AI DLP Proxy is designed as a high-performance, asynchronous gateway that si
 
 ## Sequence Diagram
 
-The following diagram illustrates the request flow, highlighting the parallel execution of static and ML analysis.
+The following diagram illustrates the request flow, highlighting the `asyncio.Queue` workers and parallel extraction logic.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Proxy as AI DLP Proxy
-    participant DLP as DLP Engine (Async)
+    participant Queue as Asyncio Queue
+    participant MLWorker as ML Worker
     participant LLM as Upstream LLM
-    participant Metrics as Prometheus
 
     User->>Proxy: POST /v1/chat/completions (Sensitive Data)
-    Proxy->>DLP: Offload Request Analysis
+    Proxy->>Proxy: Content-Type Check (JSON/Text)
 
-    par Sequential Stages
-        DLP->>DLP: Check Static Rules (FlashText)
-        DLP->>DLP: Check ML Models (Presidio)
+    par Parallel Extraction
+        Proxy->>Proxy: Check Static Rules (FlashText)
+        Proxy->>Queue: Put (Text, Future)
+        Queue->>MLWorker: Process NLP inference
+        MLWorker-->>Proxy: Set Future Result
     end
 
-    DLP-->>Proxy: Return Redacted Text
+    Proxy->>Proxy: Merge and Deduplicate Offsets (O(N log N))
+    Proxy->>Proxy: Apply [REDACTED] tokens backward
 
     par Async Operations
-        Proxy->>Metrics: Emit Metrics (Counter/Histogram)
+        Proxy->>Proxy: Emit Prometheus Metrics
         Proxy->>LLM: Forward Redacted Request
     end
 
@@ -36,21 +39,24 @@ sequenceDiagram
 ## Core Components
 
 ### 1. Proxy Core (`mitmproxy`)
-The foundation is `mitmproxy`, a robust, interactive HTTPS proxy. It handles:
-- **SSL/TLS Termination**: Decrypts traffic to inspect the payload.
-- **Connection Management**: Handles client and server connections efficiently.
-- **Addon Mechanism**: Allows us to inject custom logic (`DLPAddon`) into the request lifecycle.
+The foundation is `mitmproxy`, a robust, interactive HTTPS proxy. It handles SSL/TLS Termination, connection management, and exposes a hook (`DLPAddon`) to intercept payloads. It now safely ignores binary payloads.
 
-### 2. DLP Engine
-The brain of the operation. It uses a hybrid approach:
-- **Static Analysis**: Uses `FlashText` for O(1) keyword replacement. Ideal for known secrets (API keys, internal codenames).
-- **ML Analysis**: Uses `Microsoft Presidio` and `SpaCy` for Named Entity Recognition (NER). Detects dynamic PII like names, locations, and phone numbers.
+### 2. DLP Engine & Queue
+The engine uses an asynchronous bounded queue (`maxsize=1000`) and a fixed number of persistent background workers (default 4).
+This bounded worker pool architecture protects the proxy from thread-thrashing and memory exhaustion under high concurrency.
+- **Static Analysis**: `FlashText` extracts spans instantly.
+- **ML Analysis**: `Microsoft Presidio` via SpaCy (`en_core_web_sm`) is executed by the background workers without blocking the main event loop.
 
-### 3. Async Processing & Safety
-To ensure data safety, the proxy uses a **Fail Closed** model. The main request loop `awaits` the DLP analysis, blocking the request until it is fully sanitized. If the DLP engine fails or times out, the request is rejected (HTTP 500) to prevent data leakage.
+### 3. Smart JSON Payload Processing
+Before extraction, the proxy parses the `Content-Type` header. If the payload is `application/json`, it is fully deserialized. The proxy then performs a **recursive asynchronous traversal** of the JSON tree.
+It applies NLP extraction *only* to string values, preserving keys, integers, and the structural integrity of the JSON. This ensures that a blacklisted term won't accidentally censor a JSON key like `"model"`, which would return a 400 Bad Request from the LLM API.
 
-The two redaction stages (static keyword matching, then ML/NER) run **sequentially** within a background thread. The thread is spawned via `asyncio.to_thread` so the main event loop is never blocked, but the redaction itself is synchronous and ordered: static first, ML second.
+### 4. Parallel Redaction & Offset Merging
+In previous versions, static analysis was applied before ML, breaking the contextual window of the NLP model.
+Now, extraction runs **in parallel** on the pristine original string. Offsets (e.g., `[(5, 12, "PASSWORD"), (8, 15, "PERSON")]`) are collected, merged, deduplicated, and applied backwards. This guarantees 100% contextual accuracy for SpaCy.
 
-### 4. Observability
-To ensure production readiness, the system exposes real-time metrics:
-- **Prometheus**: Scrapes the proxy on port `9090` to collect time-series data (request counts, latency, PII detected).
+### 5. Atomic Secret Reloading
+The engine spawns a background `_vault_poller` task that connects to HashiCorp Vault. Every 60 seconds, it fetches the latest secrets and creates a new `KeywordProcessor` in memory. Once ready, it performs an **atomic reference swap**, ensuring zero-downtime key rotation without locking the request pipeline.
+
+### 6. Fail Closed Security
+If any component of the proxy crashes, the exception is caught, and the proxy returns a well-formed JSON 500 error (`{"error": {"message": "DLP Policy Violation"}}`), explicitly avoiding opaque upstream parser failures.

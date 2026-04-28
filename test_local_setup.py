@@ -14,10 +14,10 @@ def test_proxy():
     # NOTE: This requires the client (this script) to be able to resolve host.docker.internal
     # OR we can just use a dummy URL if we just want to test DLP, but the user wants to test with LM Studio.
     # If we run this script from the HOST, we should probably use the actual IP or localhost if the proxy handles it?
-    # Actually, if we send a request to "http://host.docker.internal:1234/v1/models",
-    # the proxy will receive "GET http://host.docker.internal:1234/v1/models"
+    # Actually, if we send a request to "http://host.docker.internal:1234/v1/chat/completions",
+    # the proxy will receive "POST http://host.docker.internal:1234/v1/chat/completions"
     # and try to resolve host.docker.internal, which we configured in docker-compose.
-    target_url = "http://host.docker.internal:1234/v1/models"
+    target_url = "http://host.docker.internal:1234/v1/chat/completions"
 
     print(f"Testing DLP Proxy at {proxy_url} targeting {target_url}...")
 

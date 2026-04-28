@@ -33,10 +33,12 @@ def start(port: int = 8080, ssl_bump: bool = True):
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
 
+    # Use exec to replace the CLI process with mitmdump
     try:
-        subprocess.run(cmd, env=env)
-    except KeyboardInterrupt:
-        typer.echo("Stopping proxy...")
+        os.execvpe("mitmdump", cmd, env)
+    except FileNotFoundError:
+        typer.echo("Error: mitmdump not found. Are you in the poetry shell?")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -44,7 +46,7 @@ def stats():
     """
     Show current stats from Prometheus.
     """
-    metrics_port = config.get("proxy.metrics_port", 9090)
+    metrics_port = config.proxy.metrics_port
     metrics_url = f"http://localhost:{metrics_port}"
     try:
         response = requests.get(metrics_url)
@@ -75,26 +77,26 @@ def add_term(term: str):
     """
     Add a static term to the blacklist.
     """
-    config_path = "config.yaml"
-    if not os.path.exists(config_path):
-        typer.echo(f"Config file '{config_path}' not found.")
+    provider_type = config.dlp.secrets_provider.type
+    if provider_type == "vault":
+        typer.echo("Error: Configured to use Vault. Please add secrets directly to Vault.")
         raise typer.Exit(1)
 
-    with open(config_path, "r") as f:
-        data = yaml.safe_load(f) or {}
+    terms_file = config.dlp.static_terms_file
 
-    if "dlp" not in data:
-        data["dlp"] = {}
-    if "static_terms" not in data["dlp"]:
-        data["dlp"]["static_terms"] = []
-
-    if term not in data["dlp"]["static_terms"]:
-        data["dlp"]["static_terms"].append(term)
-        with open(config_path, "w") as f:
-            yaml.dump(data, f)
-        typer.echo(f"Added '{term}' to static terms.")
+    if os.path.exists(terms_file):
+        with open(terms_file, "r") as f:
+            existing = set(line.strip() for line in f)
     else:
-        typer.echo(f"'{term}' already exists.")
+        existing = set()
+
+    if term not in existing:
+        with open(terms_file, "a") as f:
+            f.write(f"\n{term}")
+        typer.echo(f"Added '{term}' to {terms_file}.")
+        typer.echo("Note: If the proxy is running, Vault poller will pick this up automatically if configured, otherwise restart proxy or wait for hot-reload.")
+    else:
+        typer.echo(f"'{term}' already exists in {terms_file}.")
 
 
 if __name__ == "__main__":

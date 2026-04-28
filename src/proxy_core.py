@@ -13,7 +13,8 @@ logger = logging.getLogger("dlp_proxy")
 logHandler = logging.StreamHandler()
 formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(message)s')
 logHandler.setFormatter(formatter)
-logger.addHandler(logHandler)
+if not logger.handlers:
+    logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
 
 # Silence Presidio warnings
@@ -50,7 +51,7 @@ class DLPAddon:
         self.dlp_engine = DLPEngine()
 
         # Start Prometheus metrics server
-        metrics_port = config.get("proxy.metrics_port", 9090)
+        metrics_port = config.proxy.metrics_port
         try:
             start_http_server(metrics_port)
             logger.info(
@@ -67,6 +68,9 @@ class DLPAddon:
         except Exception as e:
             logger.error(f"Failed to start Prometheus server: {e}")
         logger.info("DLP Engine initialized")
+
+    def running(self):
+        self.dlp_engine.start_workers()
 
     async def request(self, flow: http.HTTPFlow):
         # We can inspect request content here if we want to redact outgoing
@@ -97,8 +101,10 @@ class DLPAddon:
                 flow.response = http.Response.make(503, b"Service Unavailable", {"Content-Type": "text/plain"})
             return
 
-        if flow.request.method in ["POST", "PUT",
-                                   "PATCH"] and flow.request.content:
+        if flow.request.method in ["POST", "PUT", "PATCH"] and flow.request.content:
+            content_type = flow.request.headers.get("Content-Type", "")
+            if "application/json" not in content_type and "text/" not in content_type:
+                return  # Skip binary or unsupported data
 
             # Request Buffering Limit
             if len(flow.request.content) > 10 * 1024 * 1024:  # 10MB
@@ -121,12 +127,43 @@ class DLPAddon:
         REQUESTS_TOTAL.inc()
         try:
             content_str = flow.request.get_text()
-            if content_str:
-                # Offload blocking ML call to thread
-                with LATENCY.time():
-                    redacted_content, stats = await asyncio.to_thread(
-                        self.dlp_engine.redact, content_str
-                    )
+            if not content_str:
+                return
+
+            content_type = flow.request.headers.get("Content-Type", "")
+
+            with LATENCY.time():
+                if "application/json" in content_type:
+                    import json
+                    try:
+                        data = json.loads(content_str)
+                        merged_stats = {"static_replacements": 0, "ml_replacements": 0, "pii_types": {}}
+
+                        async def traverse_and_redact(obj):
+                            if isinstance(obj, dict):
+                                for k, v in obj.items():
+                                    obj[k] = await traverse_and_redact(v)
+                            elif isinstance(obj, list):
+                                for i, v in enumerate(obj):
+                                    obj[i] = await traverse_and_redact(v)
+                            elif isinstance(obj, str):
+                                # Only redact string values, preserving structure and NLP context!
+                                red_str, s = await self.dlp_engine.redact(obj)
+                                merged_stats["static_replacements"] += s["static_replacements"]
+                                merged_stats["ml_replacements"] += s["ml_replacements"]
+                                for pii, count in s["pii_types"].items():
+                                    merged_stats["pii_types"][pii] = merged_stats["pii_types"].get(pii, 0) + count
+                                return red_str
+                            return obj
+
+                        redacted_data = await traverse_and_redact(data)
+                        redacted_content = json.dumps(redacted_data, ensure_ascii=False)
+                        stats = merged_stats
+                    except json.JSONDecodeError:
+                        # Fallback for malformed JSON
+                        redacted_content, stats = await self.dlp_engine.redact(content_str)
+                else:
+                    redacted_content, stats = await self.dlp_engine.redact(content_str)
 
                 # Token Usage Estimation (Input)
                 input_tokens = len(content_str) / 4
@@ -162,8 +199,8 @@ class DLPAddon:
             # Fail Closed: Block the request if DLP fails
             flow.response = http.Response.make(
                 500,
-                b"DLP Engine Error: Request blocked for safety.",
-                {"Content-Type": "text/plain"}
+                b'{"error": {"message": "DLP Policy Violation", "code": "dlp_blocked"}}',
+                {"Content-Type": "application/json"}
             )
         finally:
 

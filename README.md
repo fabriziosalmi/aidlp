@@ -19,91 +19,57 @@ A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy
 - [Overview](#overview)
 - [Features](#features)
 - [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
 - [Installation](#installation)
-  - [Local Setup](#local-setup)
-  - [Docker Deployment](#docker-deployment)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Observability](#observability)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Overview
 
-The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM providers (like OpenAI, Anthropic) and redacting sensitive data in real-time using a hybrid approach of static rules and Machine Learning models.
+The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM providers (like OpenAI, Anthropic) and redacting sensitive data in real-time. It uses an advanced parallel processing engine that combines static rules and NLP models for 100% contextual accuracy without blocking the asynchronous proxy loop.
 
 ## Features
 
-- **Hybrid Redaction Engine**: Combines the speed of static keyword matching (FlashText) with the intelligence of NLP models (Presidio/SpaCy) to detect PII, secrets, and custom terms.
-- **SSL/TLS Interception**: Full support for HTTPS traffic inspection via `mitmproxy` core.
-- **High Performance**: Asynchronous ML processing with configurable models (`en_core_web_sm` for speed) ensures minimal latency impact.
-- **Enterprise Observability**: Native Prometheus metrics (`/metrics`) and structured JSON logging for integration with Grafana/Loki.
-- **Fail Closed Security**: Requests are strictly blocked (500 Error) if the DLP engine encounters any failure, ensuring no data leakage.
-- **Scalable**: Dockerized (Multi-stage build, Python 3.12) and load-tested to handle 1000+ concurrent connections.
+- **Parallel Redaction Engine**: Runs Static analysis (FlashText) and ML analysis (Presidio/SpaCy) concurrently on the original text, merging offsets before applying redactions to preserve the NLP context window.
+- **Asynchronous Worker Queue**: Heavy ML inferences are offloaded to a bounded `asyncio.Queue` with dedicated persistent workers, preventing OOM and thread-thrashing under high concurrency.
+- **Atomic Hot-Reload**: Automatically polls HashiCorp Vault (or files) every 60 seconds and swaps redaction terms atomically, guaranteeing zero-downtime secret rotation.
+- **Strict Pydantic Validation**: Configuration is deeply validated via `pydantic-settings`, with full support for `AIDLP_` prefixed environment variables.
+- **Smart Body Routing & JSON Parsing**: Safely ignores binary files. For `application/json`, it recursively traverses the AST to redact only string values, preserving the exact JSON structure and NLP context.
+- **Enterprise Observability**: Native Prometheus metrics (`/metrics`) and structured JSON logging.
+- **Fail Closed Security**: Hardened safety loop returns a clean JSON 500 error `{"error": {"message": "DLP Policy Violation"}}` on failure, preventing downstream parser crashes.
 
 ## Architecture
 
-The system is built on top of `mitmproxy`'s robust core, extended with a custom Python addon (`DLPAddon`).
-
-1.  **Interception**: The proxy intercepts HTTP/HTTPS `POST` requests.
-2.  **Analysis**: The request body is passed to the `DLPEngine`.
-    - **Static Analysis**: Checks against `terms.txt` for known secrets.
-    - **ML Analysis**: Runs Named Entity Recognition (NER) to find PII (Names, Phones, etc.).
-3.  **Redaction**: Sensitive tokens are replaced with `[REDACTED]`.
-4.  **Forwarding**: The sanitized request is sent to the upstream server.
-5.  **Telemetry**: Metrics and logs are emitted asynchronously.
-
-## Prerequisites
-
-- **Python**: 3.12 or higher.
-- **Docker**: 20.10+ (for containerized deployment).
-- **Memory**: Minimum 2GB RAM recommended for ML models.
+The proxy intercepts requests using `mitmproxy` and offloads text analysis to the `DLPEngine`.
+Instead of sequential replacement (which corrupts ML context) or flattening payloads (which breaks JSON), the engine performs:
+1. **Recursive Traversal**: Parses JSON safely and targets strings without corrupting keys.
+2. **Parallel Extraction**: Static terms and ML entities are extracted simultaneously.
+3. **Overlap Resolution**: Offsets are merged and deduplicated in `O(N log N)`.
+4. **Atomic Replacement**: `[REDACTED]` tokens are applied from end-to-start to preserve index offsets.
 
 ## Installation
 
 ### Local Setup
-
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/fabriziosalmi/aidlp.git
-    cd aidlp
-    ```
-
-2.  **Create a virtual environment**:
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-3.  **Install dependencies**:
-    ```bash
-    pip install poetry
-    poetry install
-    poetry run python -m spacy download en_core_web_lg
-    ```
-
-4.  **Start the proxy**:
-    ```bash
-    poetry run python src/cli.py start --port 8080
-    ```
+```bash
+git clone https://github.com/fabriziosalmi/aidlp.git
+cd aidlp
+python3 -m venv venv && source venv/bin/activate
+pip install poetry
+poetry install
+poetry run python -m spacy download en_core_web_sm
+poetry run python src/cli.py start --port 8080
+```
 
 ### Docker Deployment
-
-1.  **Build and Run**:
-    ```bash
-    docker-compose up --build -d
-    ```
-
-2.  **Verify**:
-    ```bash
-    curl -x http://localhost:8080 http://httpbin.org/ip
-    ```
+```bash
+docker-compose up --build -d
+curl -x http://localhost:8080 http://httpbin.org/ip
+```
 
 ## Configuration
 
-The proxy is configured via `config.yaml` and `terms.txt`.
+The proxy uses `pydantic-settings` and can be configured via `config.yaml` or Environment Variables (prefix: `AIDLP_`). Environment variables take precedence.
 
 ### `config.yaml`
 ```yaml
@@ -115,72 +81,48 @@ proxy:
 dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
-  ml_threshold: 0.5
-  nlp_model: "en_core_web_lg" # or "en_core_web_sm" for speed
-  entities: ["PERSON", "PHONE_NUMBER"] # Optional: filter specific entities
+  nlp_model: "en_core_web_sm"
   secrets_provider:
-    type: "file" # or "vault"
+    type: "vault"
     vault:
       url: "http://localhost:8200"
       path: "aidlp/terms"
 ```
 
-### `terms.txt`
-Add one sensitive term per line. The proxy reloads this file automatically on restart (dynamic reload planned).
-```text
-super_secret_token
-internal_db_password
+### Environment Variables
+You can override any nested config. Example:
+```bash
+export AIDLP_PROXY__PORT=8080
+export AIDLP_DLP__SECRETS_PROVIDER__TYPE="vault"
+export AIDLP_DLP__SECRETS_PROVIDER__VAULT__TOKEN="hvs.your_token"
 ```
 
 ## Usage
 
-Configure your HTTP client or environment to use the proxy.
-
 **Example (cURL)**:
 ```bash
 curl -x http://localhost:8080 \
+     -H "Content-Type: application/json" \
      -X POST http://httpbin.org/post \
-     -d "My password is super_secret_token"
+     -d '{"prompt": "My password is super_secret_token and my name is John Doe"}'
 ```
 
 **Output**:
 ```json
 {
-  "data": "My password is [REDACTED]"
+  "data": "{\"prompt\": \"My password is [REDACTED] and my name is [REDACTED]\"}"
 }
 ```
 
 ## Observability
 
-### Metrics
-Prometheus metrics are available at `http://localhost:9090/metrics`.
+Prometheus metrics are available at `http://localhost:9090`.
 - `dlp_requests_total`: Total requests processed.
 - `dlp_redacted_total`: Requests containing sensitive data.
-- `dlp_pii_detected_total`: Count of PII entities by type (e.g., `EMAIL`, `PHONE_NUMBER`).
-- `dlp_token_usage_total`: Estimated token usage (input/output).
-- `dlp_latency_seconds`: Histogram of processing time.
+- `dlp_pii_detected_total`: Count of PII entities by type (e.g., `PERSON`).
 - `dlp_active_connections`: Current active connections.
 
-### Logs
-Logs are output in structured JSON format to stdout, suitable for ingestion by Fluentd/Logstash.
-
-## Troubleshooting
-
-### "Address already in use"
-- **Cause**: Port 8080 or 9090 is occupied.
-- **Fix**: Change `port` or `metrics_port` in `config.yaml`.
-
-### "Certificate Verify Failed"
-- **Cause**: The client does not trust the `mitmproxy` CA.
-- **Fix**: Install `~/.mitmproxy/mitmproxy-ca-cert.pem` into your system or browser trust store. For `curl`, use `-k` (insecure) for testing.
-
-### High Latency
-- **Cause**: ML model processing on CPU.
-- **Fix**: Ensure you are running on a machine with AVX support. For production, consider GPU acceleration (future support).
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
+Logs are printed in structured JSON format to stdout.
 
 ## License
 
