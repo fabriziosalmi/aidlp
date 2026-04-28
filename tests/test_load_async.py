@@ -62,8 +62,12 @@ async def test_async_concurrency(mock_config, mock_dlp_engine):
     # If concurrent: ~0.1s (plus overhead)
     # We assert it's significantly faster than serial
     print(f"Total time for 10 requests: {total_time:.4f}s")  # noqa: E231
-    assert total_time < 0.5, f"Requests took too long ({total_time}s), likely running serially"
-    assert total_time >= 0.1, "Requests took too little time, sleep might not have happened"
+    assert (
+        total_time < 0.5
+    ), f"Requests took too long ({total_time}s), likely running serially"
+    assert (
+        total_time >= 0.1
+    ), "Requests took too little time, sleep might not have happened"
 
 
 @pytest.mark.asyncio

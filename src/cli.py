@@ -1,9 +1,7 @@
 import typer
-import subprocess
 import os
 import requests
 import re
-import yaml
 
 from src.config import config
 
@@ -20,10 +18,14 @@ def start(port: int = 8080, ssl_bump: bool = True):
     # Construct mitmdump command
     cmd = [
         "mitmdump",
-        "-s", "src/proxy_core.py",
-        "-p", str(port),
-        "--ssl-version-client", "TLS1_2",
-        "--ssl-version-server", "TLS1_2",
+        "-s",
+        "src/proxy_core.py",
+        "-p",
+        str(port),
+        "--ssl-version-client",
+        "TLS1_2",
+        "--ssl-version-server",
+        "TLS1_2",
     ]
 
     if ssl_bump:
@@ -79,7 +81,9 @@ def add_term(term: str):
     """
     provider_type = config.dlp.secrets_provider.type
     if provider_type == "vault":
-        typer.echo("Error: Configured to use Vault. Please add secrets directly to Vault.")
+        typer.echo(
+            "Error: Configured to use Vault. Please add secrets directly to Vault."
+        )
         raise typer.Exit(1)
 
     terms_file = config.dlp.static_terms_file
@@ -94,7 +98,9 @@ def add_term(term: str):
         with open(terms_file, "a") as f:
             f.write(f"\n{term}")
         typer.echo(f"Added '{term}' to {terms_file}.")
-        typer.echo("Note: If the proxy is running, Vault poller will pick this up automatically if configured, otherwise restart proxy or wait for hot-reload.")
+        typer.echo(
+            "Note: If the proxy is running, Vault poller will pick this up automatically if configured, otherwise restart proxy or wait for hot-reload."
+        )
     else:
         typer.echo(f"'{term}' already exists in {terms_file}.")
 

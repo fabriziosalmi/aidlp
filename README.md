@@ -1,14 +1,11 @@
 # AI DLP Proxy
 
 ![CI](https://github.com/fabriziosalmi/aidlp/actions/workflows/ci.yml/badge.svg)
-![Docker](https://github.com/fabriziosalmi/aidlp/actions/workflows/docker.yml/badge.svg)
+![Docker](https://github.com/fabriziosalmi/aidlp/actions/workflows/docker-publish.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
 
 A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy designed to sanitize sensitive information before it reaches external LLM endpoints.
-
-### Demo
-[![asciicast](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz.svg)](https://asciinema.org/a/VKFol51SRDzleQKY7c2ZmgUKz)
 
 > 📘 **Documentation**
 >

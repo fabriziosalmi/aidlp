@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from src.dlp_engine import DLPEngine
 
 

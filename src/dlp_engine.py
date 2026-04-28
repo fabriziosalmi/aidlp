@@ -12,9 +12,11 @@ from .config import config
 
 logger = logging.getLogger("dlp_proxy")
 
+
 class TermProvider:
     def get_terms(self) -> list[str]:
         pass
+
 
 class FileTermProvider(TermProvider):
     def __init__(self, file_path: str):
@@ -28,6 +30,7 @@ class FileTermProvider(TermProvider):
 
         with open(self.file_path, "r") as f:
             return [line.strip() for line in f if line.strip()]
+
 
 class VaultTermProvider(TermProvider):
     def __init__(self, url: str, token: str, path: str, mount_point: str = "secret"):
@@ -54,7 +57,7 @@ class VaultTermProvider(TermProvider):
         read_response = self.client.secrets.kv.v2.read_secret_version(
             path=self.path, mount_point=self.mount_point
         )
-        data = read_response['data']['data']
+        data = read_response["data"]["data"]
         terms = []
         for key, value in data.items():
             if isinstance(value, list):
@@ -64,6 +67,7 @@ class VaultTermProvider(TermProvider):
 
         self._cached_terms = terms
         return terms
+
 
 class DLPEngine:
     def __init__(self):
@@ -111,8 +115,8 @@ class DLPEngine:
                 results = await asyncio.to_thread(
                     self.analyzer.analyze,
                     text=text,
-                    language='en',
-                    entities=self.entities
+                    language="en",
+                    entities=self.entities,
                 )
                 filtered = [r for r in results if r.score >= self.ml_threshold]
                 future.set_result(filtered)
@@ -164,7 +168,9 @@ class DLPEngine:
             stats["ml_replacements"] = len(ml_results)
             for r in ml_results:
                 spans.append((r.start, r.end, r.entity_type))
-                stats["pii_types"][r.entity_type] = stats["pii_types"].get(r.entity_type, 0) + 1
+                stats["pii_types"][r.entity_type] = (
+                    stats["pii_types"].get(r.entity_type, 0) + 1
+                )
 
         if not spans:
             return text, stats
