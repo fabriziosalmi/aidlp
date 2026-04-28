@@ -102,6 +102,12 @@ class DLPEngine:
         if config.dlp.secrets_provider.type == "vault" and not self.poller_task:
             self.poller_task = asyncio.create_task(self._vault_poller())
 
+    def shutdown(self):
+        for worker in self.workers:
+            worker.cancel()
+        if self.poller_task:
+            self.poller_task.cancel()
+
     async def _vault_poller(self):
         while True:
             await asyncio.sleep(60)

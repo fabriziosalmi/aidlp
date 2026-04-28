@@ -20,6 +20,7 @@ async def test_dlp_addon_redaction_fail_closed():
     assert f.response is not None
     assert f.response.status_code == 500
     assert b"DLP Engine Error" in f.response.content
+    addon.dlp_engine.shutdown()
 
 
 @pytest.mark.asyncio
@@ -35,3 +36,4 @@ async def test_dlp_addon_redaction_success():
     await addon.request(f)
 
     assert f.request.text == "redacted"
+    addon.dlp_engine.shutdown()

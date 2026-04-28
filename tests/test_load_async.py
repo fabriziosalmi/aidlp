@@ -18,9 +18,9 @@ def mock_dlp_engine():
     with patch("src.proxy_core.DLPEngine") as MockEngine:
         engine_instance = MockEngine.return_value
 
-        # Simulate a slow blocking operation
-        def slow_redact(text):
-            time.sleep(0.1)  # Blocking sleep
+        # Simulate a slow async operation
+        async def slow_redact(text):
+            await asyncio.sleep(0.1)  # Async sleep
             return text, {}
 
         engine_instance.redact = slow_redact
@@ -41,7 +41,7 @@ async def test_async_concurrency(mock_config, mock_dlp_engine):
         flow.request.method = "POST"
         flow.request.content = b"test content"
         flow.request.get_text.return_value = "test content"
-        flow.request.headers = {}
+        flow.request.headers = {"Content-Type": "text/plain"}
         flow.request.pretty_url = "http://example.com"
         flow.request.host = "example.com"
         return flow
@@ -78,7 +78,7 @@ async def test_request_buffering_limit(mock_config, mock_dlp_engine):
     flow.request.method = "POST"
     # Create content > 10MB
     flow.request.content = b"x" * (10 * 1024 * 1024 + 1)
-    flow.request.headers = {}
+    flow.request.headers = {"Content-Type": "text/plain"}
 
     await addon.request(flow)
 

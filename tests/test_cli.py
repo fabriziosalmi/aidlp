@@ -7,7 +7,7 @@ from src.cli import app
 runner = CliRunner()
 
 
-@patch("src.cli.subprocess.run")
+@patch("src.cli.os.execvpe")
 def test_start_default(mock_run):
     result = runner.invoke(app, ["start"])
     assert result.exit_code == 0
@@ -20,7 +20,7 @@ def test_start_default(mock_run):
     assert "--ssl-insecure" in cmd
 
 
-@patch("src.cli.subprocess.run")
+@patch("src.cli.os.execvpe")
 def test_start_custom_port(mock_run):
     result = runner.invoke(app, ["start", "--port", "9000"])
     assert result.exit_code == 0
@@ -29,7 +29,7 @@ def test_start_custom_port(mock_run):
     assert "9000" in cmd
 
 
-@patch("src.cli.subprocess.run")
+@patch("src.cli.os.execvpe")
 def test_start_no_ssl_bump(mock_run):
     result = runner.invoke(app, ["start", "--no-ssl-bump"])
     assert result.exit_code == 0
@@ -37,7 +37,7 @@ def test_start_no_ssl_bump(mock_run):
     assert "--ssl-insecure" not in cmd
 
 
-@patch("src.cli.subprocess.run", side_effect=KeyboardInterrupt)
+@patch("src.cli.os.execvpe", side_effect=KeyboardInterrupt)
 def test_start_keyboard_interrupt(mock_run):
     result = runner.invoke(app, ["start"])
     assert "Stopping proxy..." in result.output
