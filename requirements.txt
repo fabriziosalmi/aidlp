@@ -39,7 +39,7 @@ mitmproxy-linux==0.12.8 ; python_version >= "3.12" and python_version < "4.0" an
 mitmproxy-macos==0.12.8 ; python_version >= "3.12" and python_version < "4.0" and sys_platform == "darwin"
 mitmproxy-rs==0.12.8 ; python_version >= "3.12" and python_version < "4.0"
 mitmproxy-windows==0.12.8 ; python_version >= "3.12" and python_version < "4.0" and os_name == "nt"
-mitmproxy==12.2.1 ; python_version >= "3.12" and python_version < "4.0"
+mitmproxy==12.2.2 ; python_version >= "3.12" and python_version < "4.0"
 msgpack==1.0.8 ; python_version >= "3.12" and python_version < "4.0"
 murmurhash==1.0.12 ; python_version >= "3.12" and python_version < "4.0"
 numpy==1.26.4 ; python_version >= "3.12" and python_version < "4.0"
