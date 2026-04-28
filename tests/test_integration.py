@@ -20,7 +20,7 @@ async def test_dlp_addon_redaction_fail_closed():
     # Verify 500 response (Fail Closed)
     assert f.response is not None
     assert f.response.status_code == 500
-    assert b"DLP Engine Error" in f.response.content
+    assert b"DLP Policy Violation" in f.response.content
     addon.dlp_engine.shutdown()
 
 

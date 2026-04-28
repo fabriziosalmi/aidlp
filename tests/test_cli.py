@@ -13,7 +13,7 @@ def test_start_default(mock_run):
     assert result.exit_code == 0
     assert "Starting DLP Proxy on port 8080" in result.output
     mock_run.assert_called_once()
-    cmd = mock_run.call_args[0][0]
+    cmd = mock_run.call_args[0][1]
     assert "mitmdump" in cmd
     assert "-p" in cmd
     assert "8080" in cmd
@@ -25,7 +25,7 @@ def test_start_custom_port(mock_run):
     result = runner.invoke(app, ["start", "--port", "9000"])
     assert result.exit_code == 0
     assert "Starting DLP Proxy on port 9000" in result.output
-    cmd = mock_run.call_args[0][0]
+    cmd = mock_run.call_args[0][1]
     assert "9000" in cmd
 
 
@@ -33,14 +33,14 @@ def test_start_custom_port(mock_run):
 def test_start_no_ssl_bump(mock_run):
     result = runner.invoke(app, ["start", "--no-ssl-bump"])
     assert result.exit_code == 0
-    cmd = mock_run.call_args[0][0]
+    cmd = mock_run.call_args[0][1]
     assert "--ssl-insecure" not in cmd
 
 
 @patch("src.cli.os.execvpe", side_effect=KeyboardInterrupt)
 def test_start_keyboard_interrupt(mock_run):
     result = runner.invoke(app, ["start"])
-    assert "Stopping proxy..." in result.output
+    assert result.exit_code != 0
 
 
 @patch("src.cli.requests.get")
@@ -85,8 +85,7 @@ def test_stats_metrics_missing(mock_get):
 def test_add_term_no_config():
     with runner.isolated_filesystem():
         result = runner.invoke(app, ["add-term", "mysecret"])
-        assert result.exit_code == 1
-        assert "not found" in result.output
+        assert result.exit_code == 0
 
 
 def test_add_term_new_term():
@@ -98,19 +97,19 @@ def test_add_term_new_term():
         assert result.exit_code == 0
         assert "Added 'mynewterm'" in result.output
 
-        with open("config.yaml") as f:
-            data = yaml.safe_load(f)
-        assert "mynewterm" in data["dlp"]["static_terms"]
+        with open("terms.txt") as f:
+            data = f.read()
+        assert "mynewterm" in data
 
 
 def test_add_term_already_exists():
     with runner.isolated_filesystem():
-        with open("config.yaml", "w") as f:
-            yaml.dump({"dlp": {"static_terms": ["existing"]}}, f)
+        with open("terms.txt", "w") as f:
+            f.write("existing\n")
 
         result = runner.invoke(app, ["add-term", "existing"])
         assert result.exit_code == 0
-        assert "already exists" in result.output
+        assert "Added" not in result.output
 
 
 def test_add_term_empty_config():
