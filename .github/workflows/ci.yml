@@ -44,7 +44,7 @@ jobs:
 
     - name: Install SpaCy Model
       run: |
-        poetry run python -m spacy download en_core_web_sm
+        poetry run pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
     - name: Lint with flake8
       run: |
