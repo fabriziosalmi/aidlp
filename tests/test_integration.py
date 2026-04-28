@@ -12,6 +12,7 @@ async def test_dlp_addon_redaction_fail_closed():
 
     f = tflow.tflow()
     f.request.method = "POST"
+    f.request.headers["Content-Type"] = "text/plain"
     f.request.content = b"test"
 
     await addon.request(f)
@@ -31,6 +32,7 @@ async def test_dlp_addon_redaction_success():
 
     f = tflow.tflow()
     f.request.method = "POST"
+    f.request.headers["Content-Type"] = "text/plain"
     f.request.content = b"sensitive"
 
     await addon.request(f)
