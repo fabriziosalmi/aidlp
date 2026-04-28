@@ -55,4 +55,4 @@ jobs:
     - name: Run Unit Tests
       run: |
         poetry run pip install -q pytest-cov pytest-asyncio
-        poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
+        PYTHONPATH=. poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
