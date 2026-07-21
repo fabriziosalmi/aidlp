@@ -6,18 +6,25 @@ export default withMermaid(defineConfig({
     description: "Secure LLM Gateway with Data Loss Prevention",
     base: '/aidlp/',
     head: [
-    // Tutto first-party. 'unsafe-inline' serve perche' VitePress emette
-    // uno script inline per il tema e stili inline.
-    [
-      'meta',
-      {
-        'http-equiv': 'Content-Security-Policy',
-        content:
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
-          "style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-          "font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'",
-      },
-    ],
+    // Everything this site loads is first-party. 'unsafe-inline' is required
+    // because VitePress emits an inline appearance script and inline styles.
+    // Applied to the built site only: `vitepress dev` serves HMR over a
+    // websocket, which a strict connect-src would block as soon as the dev
+    // server is not same-origin (--host, or a custom server.hmr.port).
+    ...(process.env.NODE_ENV === 'production'
+      ? [
+          [
+            'meta',
+            {
+              'http-equiv': 'Content-Security-Policy',
+              content:
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+                "font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'",
+            },
+          ] as [string, Record<string, string>],
+        ]
+      : []),
         ['meta', { property: 'og:image', content: '/aidlp/banner.png' }],
         ['meta', { property: 'og:title', content: 'AI DLP Proxy' }],
         ['meta', { property: 'og:description', content: 'Secure Gateway for LLMs with Real-time PII Redaction' }],
