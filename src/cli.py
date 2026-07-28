@@ -79,6 +79,10 @@ def add_term(term: str):
     """
     Add a static term to the blacklist.
     """
+    if not term or term.strip() == "":
+        typer.echo("Error: Term cannot be empty or whitespace-only.")
+        raise typer.Exit(1)
+
     provider_type = config.dlp.secrets_provider.type
     if provider_type == "vault":
         typer.echo(
