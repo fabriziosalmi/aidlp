@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-08-13
+
+### ⚠️ BREAKING: upstream TLS certificates are now verified
+
+Through 1.x, `proxy.ssl_bump` defaulted to `true`, and its only effect was to
+pass `--ssl-insecure` to mitmproxy — **disabling verification of the upstream
+server's certificate**. The name promised TLS interception and the documentation
+described it as "Enables HTTPS interception", but neither was true. The practical
+result: every stock deployment accepted any certificate the upstream presented,
+so the prompts this proxy exists to protect could be intercepted and altered in
+transit by anything that could answer for the endpoint.
+
+**Verification is now on by default.**
+
+- Added `proxy.upstream_insecure` (default `false`), and the matching
+  `--upstream-insecure` flag, as the explicit and only way to skip verification.
+- Enabling it logs a warning on every startup, from both the CLI and the
+  mitmproxy addon, so the state is visible even when `mitmdump` is driven
+  directly.
+- `proxy.ssl_bump` and `--ssl-bump` are **deprecated and inert**. Setting either
+  prints a deprecation notice and changes nothing.
+
+**Migration.** If you talk to an upstream with a private CA or a self-signed
+certificate and change nothing, connections will now fail with a certificate
+error. That is intended. Either trust the CA on the host, or opt back in with:
+
+```yaml
+proxy:
+  upstream_insecure: true   # accepts ANY upstream certificate
+```
+
+HTTPS interception towards *clients* is unaffected — that was always mitmproxy's
+own behaviour and never depended on this setting.
+
+### Fixed
+- `aidlp start` could not start at all: it passed `--ssl-version-client` and
+  `--ssl-version-server`, removed from mitmproxy years ago, and mitmdump exited
+  with "unrecognized arguments".
+- DLP was fail-open in three ways despite the fail-closed claim: a Vault outage
+  silently emptied the static term list; `Content-Type: application/octet-stream`
+  (or no header) bypassed body inspection entirely; query strings were never
+  inspected.
+- A disconnecting client could kill the ML workers permanently, after which every
+  request hung forever rather than failing closed.
+- The Docker image could not build (it copied a `poetry.lock` that was never
+  committed) and CI resolved dependencies that contradicted `pyproject.toml`.
+
+### Changed
+- Removed `upstream.default_scheme`, which no code ever read.
+- `proxy.port` and `proxy.host` are now actually honoured by `start`.
+- The image is built on every pull request, not only on tags.
+
 ## [1.9.7] - 2025-12-04
 
 ### Added

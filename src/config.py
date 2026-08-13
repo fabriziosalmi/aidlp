@@ -37,8 +37,18 @@ class DLPConfig(BaseModel):
 class ProxyConfig(BaseModel):
     port: int = 8080
     host: str = "0.0.0.0"
-    ssl_bump: bool = True
     metrics_port: int = 9090
+
+    # Skip verification of the certificate presented by the upstream server.
+    # Turning this on means the proxy accepts ANY certificate, so the prompts
+    # it forwards can be read and altered in transit by whoever answers.
+    # Defaults to off since 2.0.0; before that it was effectively on.
+    upstream_insecure: bool = False
+
+    # Deprecated in 2.0.0, kept only so an existing config.yaml is reported
+    # rather than silently ignored. The name always promised TLS interception;
+    # its one real effect was disabling upstream verification.
+    ssl_bump: Optional[bool] = None
 
 
 class AppConfig(BaseSettings):

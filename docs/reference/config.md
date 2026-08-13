@@ -19,8 +19,30 @@ upstream:
 | :--- | :--- | :--- | :--- |
 | `port` | `int` | `8080` | The TCP port where the proxy listens for incoming connections. |
 | `host` | `string` | `0.0.0.0` | The interface to bind to. `0.0.0.0` listens on all interfaces. |
-| `ssl_bump` | `bool` | `true` | Enables HTTPS interception. Requires CA cert installation on clients. |
 | `metrics_port` | `int` | `9090` | Port for the Prometheus metrics server. |
+| `upstream_insecure` | `bool` | `false` | Skip verification of the upstream server's TLS certificate. **Leave this off.** See the warning below. |
+| `ssl_bump` | `bool` | — | **Deprecated in 2.0.0 and inert.** Setting it only prints a warning. |
+
+::: danger upstream_insecure disables a security control
+Turning `upstream_insecure` on makes the proxy accept **any** certificate the
+upstream presents, so the prompts it forwards can be intercepted and altered in
+transit. Redaction does not protect against that.
+
+Only use it against a known upstream with a private CA, never on the open
+internet. The proxy logs a warning on every startup while it is on.
+:::
+
+::: warning Renamed from `ssl_bump` in 2.0.0
+`ssl_bump` never enabled TLS interception, despite the name and despite what
+this page previously claimed. Its one real effect was disabling upstream
+certificate verification — and it defaulted to `true`, so every stock
+deployment accepted any upstream certificate.
+
+Verification is now on by default. If you relied on the old behaviour, set
+`upstream_insecure: true` explicitly. HTTPS interception itself is unaffected
+and still requires the CA certificate on clients; that was always handled by
+mitmproxy, not by this setting.
+:::
 
 ## DLP Settings
 
@@ -37,12 +59,6 @@ upstream:
 | `secrets_provider.vault.path` | `string` | - | Path to the KV secret (e.g., `aidlp/terms`). |
 | `secrets_provider.vault.token` | `string` | - | Vault token. **Recommended:** Use `VAULT_TOKEN` env var instead. |
 
-## Upstream Settings
-
-| Key | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `default_scheme` | `string` | `https` | Default protocol for upstream requests if not specified. |
-
 ## Environment Variables
 
 Sensitive configuration can be overridden via environment variables:
@@ -58,8 +74,8 @@ proxy:
   port: 8080
   # The port for Prometheus metrics
   metrics_port: 9090
-  # Enable SSL interception (required for DLP)
-  ssl_bump: true
+  # Skip verification of the upstream certificate. Leave this false.
+  upstream_insecure: false
 
 dlp:
   # Path to file containing static sensitive terms (one per line)

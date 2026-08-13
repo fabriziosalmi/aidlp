@@ -1,8 +1,13 @@
 proxy:
   port: 8080
   host: 0.0.0.0
-  ssl_bump: true
   metrics_port: 9090
+  # Skip verification of the upstream server's certificate. Leave this false.
+  # Turning it on accepts ANY certificate, so the prompts the proxy forwards
+  # can be intercepted and altered in transit -- redaction does not protect
+  # against that. Replaces the old `ssl_bump`, which did the same thing under
+  # a misleading name and defaulted to on.
+  upstream_insecure: false
 
 dlp:
   static_terms_file: "terms.txt"

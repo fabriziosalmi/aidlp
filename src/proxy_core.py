@@ -2,7 +2,7 @@ import errno
 import json
 import logging
 import os
-from mitmproxy import http
+from mitmproxy import ctx, http
 from src.dlp_engine import DLPEngine
 from src.config import config
 from prometheus_client import start_http_server, Counter, Histogram, Gauge
@@ -114,7 +114,32 @@ class DLPAddon:
             logger.error(f"Failed to start Prometheus server: {e}")
         logger.info("DLP Engine initialized")
 
+    @staticmethod
+    def warn_if_upstream_unverified(options) -> bool:
+        """Log a warning when upstream certificate verification is off.
+
+        The CLI warns too, but mitmdump can be driven directly -- the
+        deployment guide does exactly that -- so check the option we are
+        actually running with rather than trusting the launcher.
+        """
+        if options is None or not getattr(options, "ssl_insecure", False):
+            return False
+
+        logger.warning(
+            "Upstream TLS certificate verification is DISABLED. The proxy "
+            "will accept any certificate the upstream presents, so redacted "
+            "prompts can still be intercepted and altered in transit. Unset "
+            "proxy.upstream_insecure to restore verification."
+        )
+        return True
+
     def running(self):
+        try:
+            options = ctx.options
+        except Exception:
+            # Not running under a mitmproxy master (unit tests, imports).
+            options = None
+        self.warn_if_upstream_unverified(options)
         self.dlp_engine.start_workers()
 
     async def request(self, flow: http.HTTPFlow):

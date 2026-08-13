@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
 from src.cli import app
+from src.config import config
 
 runner = CliRunner()
 
@@ -18,7 +19,18 @@ def test_start_default(mock_run):
     assert "mitmdump" in cmd
     assert "-p" in cmd
     assert "8080" in cmd
-    assert "--ssl-insecure" in cmd
+
+
+@patch("src.cli.os.execvpe")
+def test_start_verifies_upstream_by_default(mock_run):
+    """The default must not disable upstream certificate verification.
+
+    Until 2.0.0 `ssl_bump` defaulted to true and mapped straight to
+    --ssl-insecure, so every stock deployment accepted any upstream
+    certificate.
+    """
+    runner.invoke(app, ["start"])
+    assert "--ssl-insecure" not in mock_run.call_args[0][1]
 
 
 @patch("src.cli.os.execvpe")
@@ -31,11 +43,38 @@ def test_start_custom_port(mock_run):
 
 
 @patch("src.cli.os.execvpe")
-def test_start_no_ssl_bump(mock_run):
-    result = runner.invoke(app, ["start", "--no-ssl-bump"])
+def test_start_upstream_insecure_is_opt_in(mock_run):
+    result = runner.invoke(app, ["start", "--upstream-insecure"])
     assert result.exit_code == 0
-    cmd = mock_run.call_args[0][1]
-    assert "--ssl-insecure" not in cmd
+    assert "--ssl-insecure" in mock_run.call_args[0][1]
+    # Turning verification off must never be quiet.
+    assert "verification is DISABLED" in result.output
+
+
+@patch("src.cli.os.execvpe")
+def test_start_upstream_insecure_from_config(mock_run):
+    with patch.object(config.proxy, "upstream_insecure", True):
+        result = runner.invoke(app, ["start"])
+    assert result.exit_code == 0
+    assert "--ssl-insecure" in mock_run.call_args[0][1]
+
+
+@patch("src.cli.os.execvpe")
+def test_deprecated_ssl_bump_warns_and_does_not_disable_verification(mock_run):
+    """`--ssl-bump` used to disable verification. It must now be inert."""
+    result = runner.invoke(app, ["start", "--ssl-bump"])
+    assert result.exit_code == 0
+    assert "ssl_bump is deprecated" in result.output
+    assert "--ssl-insecure" not in mock_run.call_args[0][1]
+
+
+@patch("src.cli.os.execvpe")
+def test_deprecated_ssl_bump_in_config_warns(mock_run):
+    with patch.object(config.proxy, "ssl_bump", True):
+        result = runner.invoke(app, ["start"])
+    assert result.exit_code == 0
+    assert "ssl_bump is deprecated" in result.output
+    assert "--ssl-insecure" not in mock_run.call_args[0][1]
 
 
 @patch("src.cli.os.execvpe")
