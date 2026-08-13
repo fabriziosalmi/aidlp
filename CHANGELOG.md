@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-08-13
+
+### Changed: environment variables now take precedence over `config.yaml`
+
+They always should have. Both the README and `docs/reference/config.md` stated
+it plainly. But `config.yaml` was loaded via `AppConfig(**raw_config)`, and in
+`pydantic-settings` constructor arguments outrank every other source — so the
+file quietly beat the environment.
+
+The consequences were exactly the kind that go unnoticed:
+
+- `AIDLP_PROXY__UPSTREAM_INSECURE=false`, set to harden a deployment, could be
+  undone by a stale `upstream_insecure: true` in a file — re-disabling the
+  upstream certificate verification that 2.0.0 had just made the default.
+- `AIDLP_DLP__ML_ENABLED=true` could be overridden into disabling ML redaction
+  entirely, leaving static term matching as the only protection, with nothing
+  announcing the downgrade.
+- `docker-compose.yml` ships `AIDLP_*` variables and assumes they win. They only
+  did because the image happens not to contain a `config.yaml`.
+
+Precedence is now, highest first: **environment → `config.yaml` → defaults**.
+Sources merge key by key, so setting one variable no longer discards the rest of
+a section.
+
+### Added
+- Startup logs a warning naming every `config.yaml` key an environment variable
+  overrides, so the conflict is stated rather than silent.
+
+### Migration
+If you run with both a `config.yaml` and `AIDLP_*` variables covering the same
+keys, your effective configuration changes with this release. The new startup
+warning names precisely which keys are affected; confirm the resulting values
+are the ones you want, especially `proxy.upstream_insecure` and `dlp.ml_enabled`.
+
 ## [2.0.0] - 2026-08-13
 
 ### ⚠️ BREAKING: upstream TLS certificates are now verified
