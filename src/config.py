@@ -92,10 +92,25 @@ def _read_yaml(config_path: str) -> dict:
 
     try:
         with open(config_path, "r") as f:
-            return yaml.safe_load(f) or {}
+            data = yaml.safe_load(f)
     except Exception as e:
         logger.critical(f"Failed to load yaml config: {e}")
         raise
+
+    if data is None:  # empty file
+        return {}
+
+    if not isinstance(data, dict):
+        # A top-level list or scalar would otherwise reach the settings
+        # source and fail somewhere far less informative.
+        message = (
+            f"Config file {config_path} must contain a mapping at the top "
+            f"level, got {type(data).__name__}."
+        )
+        logger.critical(message)
+        raise TypeError(message)
+
+    return data
 
 
 def find_env_shadowed_keys(raw_config: dict, environ=None) -> list[str]:
@@ -146,8 +161,12 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
             # First source wins. Environment beats the YAML file, which
             # beats the field defaults -- the order the README always
             # documented and docker-compose.yml always assumed.
+            #
+            # init_settings is deliberately absent: load_config passes no
+            # keyword arguments, and leaving it in would keep a silent tier
+            # above the environment. That extra tier is exactly what caused
+            # this bug in the first place.
             return (
-                init_settings,
                 env_settings,
                 dotenv_settings,
                 _MappingSource(settings_cls, raw_config),

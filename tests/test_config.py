@@ -6,7 +6,7 @@ from src.config import find_env_shadowed_keys, load_config
 
 def _write(tmp_path, data):
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.dump(data))
+    path.write_text(yaml.safe_dump(data))
     return str(path)
 
 
@@ -72,8 +72,24 @@ def test_malformed_yaml_raises(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("proxy: [unclosed\n")
 
-    with pytest.raises(Exception):
+    with pytest.raises(yaml.YAMLError):
         load_config(str(path))
+
+
+def test_non_mapping_yaml_raises_a_clear_error(tmp_path):
+    """A top-level list would otherwise fail deep inside the settings source."""
+    path = tmp_path / "config.yaml"
+    path.write_text("- proxy\n- dlp\n")
+
+    with pytest.raises(TypeError, match="must contain a mapping"):
+        load_config(str(path))
+
+
+def test_empty_yaml_falls_back_to_defaults(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("")
+
+    assert load_config(str(path)).proxy.port == 8080
 
 
 def test_find_env_shadowed_keys_reports_nested_conflicts():
