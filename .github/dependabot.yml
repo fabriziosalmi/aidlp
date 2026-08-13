@@ -1,5 +1,9 @@
 version: 2
 updates:
+  # Python dependencies are resolved from pyproject.toml + poetry.lock.
+  # The old requirements.txt was a stale poetry export that contradicted
+  # pyproject.toml (it pinned typer 0.9 against a ^0.12 constraint) and
+  # that nothing consumed, so dependabot churned on it for months.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -9,10 +13,25 @@ updates:
         patterns:
           - "*"
 
+  # The docs site has its own lockfile; npm PRs were already being opened
+  # against it even though no npm ecosystem was declared here.
+  - package-ecosystem: "npm"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    groups:
+      docs-dependencies:
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/"

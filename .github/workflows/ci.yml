@@ -38,13 +38,23 @@ jobs:
         path: .venv
         key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
+    - name: Check lockfile is in sync with pyproject.toml
+      run: poetry check --lock
+
     - name: Install dependencies
       if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
       run: poetry install --no-interaction --no-root
 
     - name: Install SpaCy Model
+      # --no-deps is load-bearing. Without it pip re-resolves the model's
+      # own requirement (spacy<3.8) and silently downgrades spacy, dragging
+      # typer to a version outside the pyproject constraint. That is what
+      # removed CliRunner.isolated_filesystem and kept the test run red.
       run: |
-        poetry run pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+        poetry run pip install --no-deps https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+    - name: Verify the installed environment is still consistent
+      run: poetry run pip check
 
     - name: Lint with flake8
       run: |

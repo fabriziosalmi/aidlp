@@ -1,0 +1,35 @@
+# Without this file the build context is ~1GB of virtualenvs and
+# node_modules, all of which the image rebuilds from scratch anyway.
+.git
+.github
+.venv
+.venv*
+venv
+env
+node_modules
+docs
+
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+*.egg-info
+
+.env
+*.log
+*.pid
+*.cast
+commits.txt
+stats.json
+
+.vscode
+.idea
+.DS_Store
+
+tests
+load_test.py
+test_local_setup.py
+verify_dlp.py
+demo_scenario.sh
+docker-compose.yml

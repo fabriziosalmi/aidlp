@@ -18,8 +18,10 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Install SpaCy models directly to the prefix (Only SM to avoid 800MB bloat)
-RUN pip install --no-cache-dir --prefix=/install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+# Install SpaCy models directly to the prefix (Only SM to avoid 800MB bloat).
+# --no-deps: the model pins spacy<3.8 and would otherwise downgrade the
+# resolved dependency set behind poetry's back.
+RUN pip install --no-cache-dir --no-deps --prefix=/install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
 
 # Final stage
 FROM python:3.12-slim

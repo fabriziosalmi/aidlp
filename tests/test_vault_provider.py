@@ -1,5 +1,13 @@
+import pytest
+
 from unittest.mock import patch
-from src.dlp_engine import VaultTermProvider
+from src.dlp_engine import TermFetchError, VaultTermProvider
+
+
+def _provider():
+    return VaultTermProvider(
+        url="http://localhost:8200", token="token", path="secret/data"
+    )
 
 
 def test_vault_provider_success():
@@ -13,10 +21,7 @@ def test_vault_provider_success():
             "data": {"data": {"term1": "secret1", "term2": ["secret2", "secret3"]}}
         }
 
-        provider = VaultTermProvider(
-            url="http://localhost:8200", token="token", path="secret/data"
-        )
-        terms = provider.get_terms()
+        terms = _provider().get_terms()
 
         assert "secret1" in terms
         assert "secret2" in terms
@@ -24,20 +29,20 @@ def test_vault_provider_success():
         assert len(terms) == 3
 
 
-def test_vault_provider_unauthenticated():
+def test_vault_provider_unauthenticated_raises():
+    """A failed fetch must NOT be reported as 'no terms'.
+
+    Returning [] here would install an empty keyword set upstream and
+    silently forward secrets in the clear.
+    """
     with patch("src.dlp_engine.hvac.Client") as MockClient:
-        mock_client_instance = MockClient.return_value
-        mock_client_instance.is_authenticated.return_value = False
+        MockClient.return_value.is_authenticated.return_value = False
 
-        provider = VaultTermProvider(
-            url="http://localhost:8200", token="token", path="secret/data"
-        )
-        terms = provider.get_terms()
-
-        assert terms == []
+        with pytest.raises(TermFetchError):
+            _provider().get_terms()
 
 
-def test_vault_provider_exception():
+def test_vault_provider_exception_raises():
     with patch("src.dlp_engine.hvac.Client") as MockClient:
         mock_client_instance = MockClient.return_value
         mock_client_instance.is_authenticated.return_value = True
@@ -45,9 +50,22 @@ def test_vault_provider_exception():
             "Vault error"
         )
 
-        provider = VaultTermProvider(
-            url="http://localhost:8200", token="token", path="secret/data"
-        )
-        terms = provider.get_terms()
+        with pytest.raises(TermFetchError):
+            _provider().get_terms()
 
-        assert terms == []
+
+def test_vault_provider_serves_cache_after_outage():
+    """Once a good fetch happened, a later outage falls back to it."""
+    with patch("src.dlp_engine.hvac.Client") as MockClient:
+        mock_client_instance = MockClient.return_value
+        mock_client_instance.is_authenticated.return_value = True
+        read = mock_client_instance.secrets.kv.v2.read_secret_version
+        read.return_value = {"data": {"data": {"term1": "secret1"}}}
+
+        provider = _provider()
+        assert provider.get_terms() == ["secret1"]
+
+        # Vault goes away; the provider must keep serving the last good list
+        # instead of emptying the term set.
+        read.side_effect = Exception("Vault unreachable")
+        assert provider.get_terms() == ["secret1"]

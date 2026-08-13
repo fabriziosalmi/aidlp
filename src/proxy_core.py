@@ -1,4 +1,5 @@
 import errno
+import json
 import logging
 import os
 from mitmproxy import http
@@ -51,6 +52,44 @@ LATENCY = Histogram(
 ACTIVE_CONNECTIONS = Gauge(
     "dlp_active_connections", "Number of currently active connections"
 )
+
+
+MAX_BODY_BYTES = 10 * 1024 * 1024
+
+# Media types that genuinely cannot carry inspectable text.
+BINARY_CONTENT_PREFIXES = ("image/", "audio/", "video/", "font/")
+BINARY_CONTENT_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/zip",
+        "application/gzip",
+        "application/x-tar",
+        "application/x-7z-compressed",
+    }
+)
+
+
+def _is_binary_content_type(content_type: str) -> bool:
+    """Decide whether a body can be skipped without inspecting it.
+
+    Deliberately a deny-list. The previous allow-list only scanned
+    "application/json" and "text/*", so any client could bypass DLP
+    completely by sending Content-Type: application/octet-stream -- or by
+    omitting the header altogether.
+    """
+    ct = content_type.split(";")[0].strip().lower()
+    return ct.startswith(BINARY_CONTENT_PREFIXES) or ct in BINARY_CONTENT_TYPES
+
+
+def _merge_stats(target: dict, source: dict) -> None:
+    target["static_replacements"] += source.get("static_replacements", 0)
+    target["ml_replacements"] += source.get("ml_replacements", 0)
+    for pii, count in source.get("pii_types", {}).items():
+        target["pii_types"][pii] = target["pii_types"].get(pii, 0) + count
+
+
+def _new_stats() -> dict:
+    return {"static_replacements": 0, "ml_replacements": 0, "pii_types": {}}
 
 
 class DLPAddon:
@@ -111,111 +150,130 @@ class DLPAddon:
                 )
             return
 
-        if flow.request.method in ["POST", "PUT", "PATCH"] and flow.request.content:
-            content_type = flow.request.headers.get("Content-Type", "")
-            if "application/json" not in content_type and "text/" not in content_type:
-                return  # Skip binary or unsupported data
+        content = flow.request.content
 
-            # Request Buffering Limit
-            if len(flow.request.content) > 10 * 1024 * 1024:  # 10MB
-                logger.warning(
-                    "Request too large",
-                    extra={"request_id": request_id, "size": len(flow.request.content)},
+        # Request Buffering Limit
+        if content and len(content) > MAX_BODY_BYTES:
+            logger.warning(
+                "Request too large",
+                extra={"request_id": request_id, "size": len(content)},
+            )
+            flow.response = http.Response.make(
+                413, b"Request Entity Too Large", {"Content-Type": "text/plain"}
+            )
+            return
+
+        content_type = flow.request.headers.get("Content-Type", "")
+        inspect_body = bool(content) and not _is_binary_content_type(content_type)
+        # The query string is scanned on every method: a plain
+        # GET /v1/completions?prompt=<secret> used to sail straight through.
+        inspect_query = bool(flow.request.query)
+
+        if inspect_body or inspect_query:
+            # Await the redaction so it happens BEFORE forwarding. This makes
+            # the proxy blocking for the duration of the analysis.
+            await self.process_request(
+                flow, inspect_body=inspect_body, inspect_query=inspect_query
+            )
+
+    async def _redact_json_tree(self, obj, stats: dict):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                obj[k] = await self._redact_json_tree(v, stats)
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                obj[i] = await self._redact_json_tree(v, stats)
+        elif isinstance(obj, str):
+            # Only redact string values, preserving structure and NLP context!
+            red_str, s = await self.dlp_engine.redact(obj)
+            _merge_stats(stats, s)
+            return red_str
+        return obj
+
+    async def _redact_body(self, flow: http.HTTPFlow, stats: dict) -> bool:
+        """Redact the request body in place. Returns True if it changed."""
+        # strict=False so an undecodable byte does not fail the whole request
+        # closed. The body is only written back when something was redacted.
+        content_str = flow.request.get_text(strict=False)
+        if not content_str:
+            return False
+
+        content_type = flow.request.headers.get("Content-Type", "")
+        if "application/json" in content_type:
+            try:
+                data = json.loads(content_str)
+            except json.JSONDecodeError:
+                # Fallback for malformed JSON
+                redacted_content, s = await self.dlp_engine.redact(content_str)
+                _merge_stats(stats, s)
+            else:
+                redacted_content = json.dumps(
+                    await self._redact_json_tree(data, stats), ensure_ascii=False
                 )
-                flow.response = http.Response.make(
-                    413, b"Request Entity Too Large", {"Content-Type": "text/plain"}
-                )
-                return
+        else:
+            redacted_content, s = await self.dlp_engine.redact(content_str)
+            _merge_stats(stats, s)
 
-            # Await the process_request to ensure redaction happens BEFORE forwarding.
-            # This makes the proxy blocking for the duration of the analysis.
-            await self.process_request(flow)
+        TOKEN_USAGE_TOTAL.labels(direction="input").inc(len(content_str) / 4)
 
-    async def process_request(self, flow: http.HTTPFlow):  # noqa: C901
+        if redacted_content == content_str:
+            TOKEN_USAGE_TOTAL.labels(direction="output").inc(len(content_str) / 4)
+            return False
+
+        flow.request.set_text(redacted_content)
+        TOKEN_USAGE_TOTAL.labels(direction="output").inc(len(redacted_content) / 4)
+        return True
+
+    async def _redact_query(self, flow: http.HTTPFlow, stats: dict) -> bool:
+        """Redact query-string values in place. Returns True if any changed."""
+        items = list(flow.request.query.items(multi=True))
+        if not items:
+            return False
+
+        changed = False
+        redacted_items = []
+        for key, value in items:
+            red_value, s = await self.dlp_engine.redact(value)
+            _merge_stats(stats, s)
+            changed = changed or red_value != value
+            redacted_items.append((key, red_value))
+
+        if changed:
+            flow.request.query = redacted_items
+        return changed
+
+    async def process_request(
+        self,
+        flow: http.HTTPFlow,
+        inspect_body: bool = True,
+        inspect_query: bool = False,
+    ):
         request_id = flow.request.headers.get("X-Request-ID", "unknown")
 
         ACTIVE_CONNECTIONS.inc()
         REQUESTS_TOTAL.inc()
         try:
-            content_str = flow.request.get_text()
-            if not content_str:
-                return
-
-            content_type = flow.request.headers.get("Content-Type", "")
+            stats = _new_stats()
+            changed = False
 
             with LATENCY.time():
-                if "application/json" in content_type:
-                    import json
+                if inspect_query:
+                    changed |= await self._redact_query(flow, stats)
+                if inspect_body:
+                    changed |= await self._redact_body(flow, stats)
 
-                    try:
-                        data = json.loads(content_str)
-                        merged_stats = {
-                            "static_replacements": 0,
-                            "ml_replacements": 0,
-                            "pii_types": {},
-                        }
-
-                        async def traverse_and_redact(obj):
-                            if isinstance(obj, dict):
-                                for k, v in obj.items():
-                                    obj[k] = await traverse_and_redact(v)
-                            elif isinstance(obj, list):
-                                for i, v in enumerate(obj):
-                                    obj[i] = await traverse_and_redact(v)
-                            elif isinstance(obj, str):
-                                # Only redact string values, preserving structure and NLP context!
-                                red_str, s = await self.dlp_engine.redact(obj)
-                                merged_stats["static_replacements"] += s[
-                                    "static_replacements"
-                                ]
-                                merged_stats["ml_replacements"] += s["ml_replacements"]
-                                for pii, count in s["pii_types"].items():
-                                    merged_stats["pii_types"][pii] = (
-                                        merged_stats["pii_types"].get(pii, 0) + count
-                                    )
-                                return red_str
-                            return obj
-
-                        redacted_data = await traverse_and_redact(data)
-                        redacted_content = json.dumps(redacted_data, ensure_ascii=False)
-                        stats = merged_stats
-                    except json.JSONDecodeError:
-                        # Fallback for malformed JSON
-                        redacted_content, stats = await self.dlp_engine.redact(
-                            content_str
-                        )
-                else:
-                    redacted_content, stats = await self.dlp_engine.redact(content_str)
-
-                # Token Usage Estimation (Input)
-                input_tokens = len(content_str) / 4
-                TOKEN_USAGE_TOTAL.labels(direction="input").inc(input_tokens)
-
-                if redacted_content != content_str:
-                    flow.request.set_text(redacted_content)
-                    REDACTED_TOTAL.inc()
-
-                    # Token Usage Estimation (Output - if changed)
-                    output_tokens = len(redacted_content) / 4
-                    TOKEN_USAGE_TOTAL.labels(direction="output").inc(output_tokens)
-
-                    # PII Metrics
-                    if "pii_types" in stats:
-                        for pii_type, count in stats["pii_types"].items():
-                            PII_DETECTED_TOTAL.labels(type=pii_type).inc(count)
-
-                    logger.info(
-                        "Redacted request",
-                        extra={
-                            "url": flow.request.pretty_url,
-                            "stats": stats,
-                            "request_id": request_id,
-                        },
-                    )
-
-                else:
-                    # No redaction, output tokens = input tokens
-                    TOKEN_USAGE_TOTAL.labels(direction="output").inc(input_tokens)
+            if changed:
+                REDACTED_TOTAL.inc()
+                for pii_type, count in stats["pii_types"].items():
+                    PII_DETECTED_TOTAL.labels(type=pii_type).inc(count)
+                logger.info(
+                    "Redacted request",
+                    extra={
+                        "url": flow.request.pretty_url,
+                        "stats": stats,
+                        "request_id": request_id,
+                    },
+                )
         except Exception as e:
             logger.error(
                 "Error redacting request",

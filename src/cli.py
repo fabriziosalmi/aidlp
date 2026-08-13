@@ -2,6 +2,7 @@ import typer
 import os
 import requests
 import re
+from typing import Optional
 
 from src.config import config
 
@@ -9,23 +10,35 @@ app = typer.Typer()
 
 
 @app.command()
-def start(port: int = 8080, ssl_bump: bool = True):
+def start(
+    port: Optional[int] = None,
+    host: Optional[str] = None,
+    ssl_bump: bool = True,
+):
     """
     Start the DLP Proxy.
     """
-    typer.echo(f"Starting DLP Proxy on port {port}...")
+    # Fall back to config.yaml / AIDLP_* env vars when not given on the CLI.
+    port = port if port is not None else config.proxy.port
+    host = host if host is not None else config.proxy.host
 
-    # Construct mitmdump command
+    typer.echo(f"Starting DLP Proxy on {host}:{port}...")
+
+    # Construct mitmdump command.
+    # NOTE: --ssl-version-client/--ssl-version-server were removed in
+    # mitmproxy; the current spelling is --set tls_version_*_min.
     cmd = [
         "mitmdump",
         "-s",
         "src/proxy_core.py",
         "-p",
         str(port),
-        "--ssl-version-client",
-        "TLS1_2",
-        "--ssl-version-server",
-        "TLS1_2",
+        "--listen-host",
+        str(host),
+        "--set",
+        "tls_version_client_min=TLS1_2",
+        "--set",
+        "tls_version_server_min=TLS1_2",
     ]
 
     if ssl_bump:

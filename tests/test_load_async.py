@@ -1,16 +1,10 @@
 import pytest
 import asyncio
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+from mitmproxy.test import tflow
+
 from src.proxy_core import DLPAddon
-
-
-# Mock config to avoid loading real models
-@pytest.fixture
-def mock_config():
-    with patch("src.proxy_core.config") as mock:
-        mock.get.return_value = 9090  # metrics port
-        yield mock
 
 
 @pytest.fixture
@@ -27,41 +21,28 @@ def mock_dlp_engine():
         yield engine_instance
 
 
+def _make_flow(content=b"test content", content_type="text/plain"):
+    flow = tflow.tflow()
+    flow.request.method = "POST"
+    flow.request.headers["Content-Type"] = content_type
+    flow.request.content = content
+    return flow
+
+
 @pytest.mark.asyncio
-async def test_async_concurrency(mock_config, mock_dlp_engine):
+async def test_async_concurrency(mock_dlp_engine):
     """
-    Verify that multiple requests are processed concurrently using threads,
+    Verify that multiple requests are processed concurrently,
     so the total time is much less than the sum of individual processing times.
     """
     addon = DLPAddon()
-
-    # Create a flow with content
-    def create_flow():
-        flow = MagicMock()
-        flow.request.method = "POST"
-        flow.request.content = b"test content"
-        flow.request.get_text.return_value = "test content"
-        flow.request.headers = {"Content-Type": "text/plain"}
-        flow.request.pretty_url = "http://example.com"
-        flow.request.host = "example.com"
-        return flow
-
-    # Run 10 requests concurrently
-    flows = [create_flow() for _ in range(10)]
+    flows = [_make_flow() for _ in range(10)]
 
     start_time = time.time()
-
-    # We need to call process_request directly or via request
-    # addon.request is async
-    tasks = [addon.request(flow) for flow in flows]
-    await asyncio.gather(*tasks)
-
+    await asyncio.gather(*[addon.request(flow) for flow in flows])
     total_time = time.time() - start_time
 
-    # If serial: 10 * 0.1 = 1.0s
-    # If concurrent: ~0.1s (plus overhead)
-    # We assert it's significantly faster than serial
-    print(f"Total time for 10 requests: {total_time:.4f}s")  # noqa: E231
+    # If serial: 10 * 0.1 = 1.0s. If concurrent: ~0.1s (plus overhead).
     assert (
         total_time < 0.5
     ), f"Requests took too long ({total_time}s), likely running serially"
@@ -71,16 +52,10 @@ async def test_async_concurrency(mock_config, mock_dlp_engine):
 
 
 @pytest.mark.asyncio
-async def test_request_buffering_limit(mock_config, mock_dlp_engine):
+async def test_request_buffering_limit(mock_dlp_engine):
     addon = DLPAddon()
-
-    flow = MagicMock()
-    flow.request.method = "POST"
-    # Create content > 10MB
-    flow.request.content = b"x" * (10 * 1024 * 1024 + 1)
-    flow.request.headers = {"Content-Type": "text/plain"}
+    flow = _make_flow(content=b"x" * (10 * 1024 * 1024 + 1))
 
     await addon.request(flow)
 
-    # Verify response is 413
     assert flow.response.status_code == 413

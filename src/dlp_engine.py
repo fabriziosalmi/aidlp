@@ -13,9 +13,41 @@ from .config import config
 logger = logging.getLogger("dlp_proxy")
 
 
+def _merge_spans(spans: list) -> list:
+    """Collapse overlapping (start, end, type) spans into disjoint ranges.
+
+    Returned in ascending order, so callers must apply them in reverse to
+    keep earlier offsets valid while substituting.
+    """
+    merged = []
+    current_start, current_end = -1, -1
+
+    for start, end, _etype in sorted(spans, key=lambda s: s[0]):
+        if current_start == -1:
+            current_start, current_end = start, end
+        elif start <= current_end:
+            current_end = max(current_end, end)
+        else:
+            merged.append((current_start, current_end))
+            current_start, current_end = start, end
+
+    if current_start != -1:
+        merged.append((current_start, current_end))
+
+    return merged
+
+
+class TermFetchError(Exception):
+    """Raised when a provider cannot supply a usable term list.
+
+    Callers must treat this as "keep the previous terms", never as
+    "there are no terms" -- the latter silently disables redaction.
+    """
+
+
 class TermProvider:
     def get_terms(self) -> list[str]:
-        pass
+        raise NotImplementedError
 
 
 class FileTermProvider(TermProvider):
@@ -45,10 +77,17 @@ class VaultTermProvider(TermProvider):
             return self.breaker.call(self._fetch_from_vault)
         except pybreaker.CircuitBreakerError:
             logger.error("Vault Circuit Breaker open. Using cached terms.")
-            return self._cached_terms
+            return self._cached_or_raise()
         except Exception as e:
             logger.error(f"Failed to fetch terms from Vault: {e}")
-            return self._cached_terms
+            return self._cached_or_raise()
+
+    def _cached_or_raise(self) -> list[str]:
+        # An empty cache means we never had a good fetch. Returning [] here
+        # would install an empty keyword set and silently stop redacting.
+        if not self._cached_terms:
+            raise TermFetchError("Vault unreachable and no cached terms available")
+        return self._cached_terms
 
     def _fetch_from_vault(self) -> list[str]:
         if not self.client.is_authenticated():
@@ -74,8 +113,12 @@ class DLPEngine:
         self.keyword_processor = KeywordProcessor()
         self.ml_enabled = config.dlp.ml_enabled
         self.ml_threshold = config.dlp.ml_threshold
+        self.ml_timeout = config.dlp.ml_timeout
         self.entities = config.dlp.entities
         self.replacement_token = config.dlp.replacement_token
+
+        self._term_provider = None
+        self._terms_loaded = False
 
         self.analyzer = None
         if self.ml_enabled:
@@ -125,79 +168,102 @@ class DLPEngine:
                     entities=self.entities,
                 )
                 filtered = [r for r in results if r.score >= self.ml_threshold]
-                future.set_result(filtered)
+                # The caller may have timed out or disconnected, which cancels
+                # the future. Setting a result on it raises InvalidStateError,
+                # and that used to escape and kill the worker for good.
+                if not future.done():
+                    future.set_result(filtered)
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
-                future.set_exception(e)
+                logger.error(f"ML worker failed to analyze text: {e}")
+                if not future.done():
+                    future.set_exception(e)
             finally:
                 self.task_queue.task_done()
 
-    def reload_config(self):
-        new_kp = KeywordProcessor()
-        provider_type = config.dlp.secrets_provider.type
-        terms = []
+    def _get_provider(self) -> TermProvider:
+        """Build the configured term provider once and reuse it.
 
-        if provider_type == "vault":
-            url = config.dlp.secrets_provider.vault.url
-            token = config.dlp.secrets_provider.vault.token or os.getenv("VAULT_TOKEN")
-            path = config.dlp.secrets_provider.vault.path
-            if url and token and path:
-                provider = VaultTermProvider(url, token, path)
-                terms = provider.get_terms()
-                logger.info(f"Loaded {len(terms)} terms from Vault")
-            else:
-                logger.error("Vault configuration missing")
+        VaultTermProvider holds the last-known-good terms and the circuit
+        breaker state on the instance, so rebuilding it on every reload would
+        reset both and defeat the whole point of having them.
+        """
+        if self._term_provider is not None:
+            return self._term_provider
+
+        if config.dlp.secrets_provider.type == "vault":
+            vault_cfg = config.dlp.secrets_provider.vault
+            if vault_cfg is None:
+                raise TermFetchError(
+                    "secrets_provider.type is 'vault' but no vault section configured"
+                )
+            token = vault_cfg.token or os.getenv("VAULT_TOKEN")
+            if not (vault_cfg.url and token and vault_cfg.path):
+                raise TermFetchError("Vault configuration incomplete (url/token/path)")
+            self._term_provider = VaultTermProvider(
+                vault_cfg.url, token, vault_cfg.path
+            )
         else:
-            file_path = config.dlp.static_terms_file
-            provider = FileTermProvider(file_path)
-            terms = provider.get_terms()
-            logger.info(f"Loaded {len(terms)} terms from file: {file_path}")
+            self._term_provider = FileTermProvider(config.dlp.static_terms_file)
 
+        return self._term_provider
+
+    def reload_config(self):
+        try:
+            terms = self._get_provider().get_terms()
+        except TermFetchError as e:
+            if not self._terms_loaded:
+                # Nothing to fall back on. Starting up with an empty keyword
+                # set would forward secrets in the clear, so refuse to run.
+                raise
+            logger.error(f"Term reload failed ({e}); keeping previously loaded terms")
+            return
+
+        new_kp = KeywordProcessor()
         for term in terms:
             new_kp.add_keyword(term, term)
 
         self.keyword_processor = new_kp
+        self._terms_loaded = True
+        logger.info(f"Loaded {len(terms)} terms from {config.dlp.secrets_provider.type}")
+
+    async def _analyze_ml(self, text: str, spans: list, stats: dict) -> None:
+        future = asyncio.get_running_loop().create_future()
+        await self.task_queue.put((text, future))
+        # Never wait forever: if every worker is gone the queue would
+        # otherwise hang the request, and a hang is not an exception, so
+        # the proxy's fail-closed path would never fire.
+        try:
+            ml_results = await asyncio.wait_for(future, timeout=self.ml_timeout)
+        except asyncio.TimeoutError:
+            logger.error(f"ML analysis timed out after {self.ml_timeout}s")
+            raise
+
+        stats["ml_replacements"] = len(ml_results)
+        for r in ml_results:
+            spans.append((r.start, r.end, r.entity_type))
+            stats["pii_types"][r.entity_type] = (
+                stats["pii_types"].get(r.entity_type, 0) + 1
+            )
 
     async def redact(self, text: str) -> tuple[str, dict]:
         stats = {"static_replacements": 0, "ml_replacements": 0, "pii_types": {}}
         spans = []
 
         static_hits = self.keyword_processor.extract_keywords(text, span_info=True)
-        for keyword, start, end in static_hits:
+        for _keyword, start, end in static_hits:
             spans.append((start, end, "STATIC_TERM"))
             stats["static_replacements"] += 1
 
         if self.ml_enabled and self.analyzer:
-            future = asyncio.get_running_loop().create_future()
-            await self.task_queue.put((text, future))
-            ml_results = await future
-
-            stats["ml_replacements"] = len(ml_results)
-            for r in ml_results:
-                spans.append((r.start, r.end, r.entity_type))
-                stats["pii_types"][r.entity_type] = (
-                    stats["pii_types"].get(r.entity_type, 0) + 1
-                )
+            await self._analyze_ml(text, spans, stats)
 
         if not spans:
             return text, stats
 
-        spans.sort(key=lambda x: x[0])
-        merged_spans = []
-        current_start, current_end = -1, -1
-
-        for start, end, etype in spans:
-            if current_start == -1:
-                current_start, current_end = start, end
-            elif start <= current_end:
-                current_end = max(current_end, end)
-            else:
-                merged_spans.append((current_start, current_end))
-                current_start, current_end = start, end
-        if current_start != -1:
-            merged_spans.append((current_start, current_end))
-
         res = list(text)
-        for start, end in reversed(merged_spans):
+        for start, end in reversed(_merge_spans(spans)):
             res[start:end] = list(self.replacement_token)
 
         return "".join(res), stats
