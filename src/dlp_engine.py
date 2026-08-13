@@ -75,18 +75,20 @@ class VaultTermProvider(TermProvider):
     def get_terms(self) -> list[str]:
         try:
             return self.breaker.call(self._fetch_from_vault)
-        except pybreaker.CircuitBreakerError:
+        except pybreaker.CircuitBreakerError as e:
             logger.error("Vault Circuit Breaker open. Using cached terms.")
-            return self._cached_or_raise()
+            return self._cached_or_raise(f"circuit breaker open: {e}")
         except Exception as e:
             logger.error(f"Failed to fetch terms from Vault: {e}")
-            return self._cached_or_raise()
+            return self._cached_or_raise(str(e))
 
-    def _cached_or_raise(self) -> list[str]:
+    def _cached_or_raise(self, reason: str) -> list[str]:
         # An empty cache means we never had a good fetch. Returning [] here
         # would install an empty keyword set and silently stop redacting.
+        # Carry the underlying cause: "unreachable", "not authenticated" and
+        # "breaker open" send an operator to three different places.
         if not self._cached_terms:
-            raise TermFetchError("Vault unreachable and no cached terms available")
+            raise TermFetchError(f"Vault fetch failed ({reason}); no cached terms")
         return self._cached_terms
 
     def _fetch_from_vault(self) -> list[str]:

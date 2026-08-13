@@ -238,6 +238,16 @@ class DLPAddon:
             changed = changed or red_value != value
             redacted_items.append((key, red_value))
 
+        # Query values are sent upstream just like the body, so they count
+        # towards the token estimate too -- otherwise a prompt passed as a
+        # query parameter is redacted but never measured.
+        TOKEN_USAGE_TOTAL.labels(direction="input").inc(
+            sum(len(v) for _, v in items) / 4
+        )
+        TOKEN_USAGE_TOTAL.labels(direction="output").inc(
+            sum(len(v) for _, v in redacted_items) / 4
+        )
+
         if changed:
             flow.request.query = redacted_items
         return changed
