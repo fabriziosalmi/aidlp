@@ -126,10 +126,12 @@ class DLPAddon:
             return False
 
         logger.warning(
-            "Upstream TLS certificate verification is DISABLED. The proxy "
-            "will accept any certificate the upstream presents, so redacted "
-            "prompts can still be intercepted and altered in transit. Unset "
-            "proxy.upstream_insecure to restore verification."
+            "Upstream TLS certificate verification is DISABLED "
+            "(mitmproxy option ssl_insecure). The proxy will accept any "
+            "certificate the upstream presents, so redacted prompts can still "
+            "be intercepted and altered in transit. To restore verification: "
+            "drop --ssl-insecure if you launch mitmdump directly, or unset "
+            "proxy.upstream_insecure if you start via the aidlp CLI."
         )
         return True
 
