@@ -61,7 +61,38 @@ mitmproxy, not by this setting.
 
 ## Environment Variables
 
-Sensitive configuration can be overridden via environment variables:
+Any setting can be supplied through an `AIDLP_`-prefixed variable, using `__`
+to descend into nested keys — `AIDLP_DLP__SECRETS_PROVIDER__TYPE` maps to
+`dlp.secrets_provider.type`.
+
+### Precedence
+
+Highest first:
+
+1. Environment variables (`AIDLP_*`)
+2. `config.yaml`
+3. Built-in defaults
+
+Sources are merged key by key, so setting one variable does not discard the rest
+of a `config.yaml` section.
+
+::: warning Reversed in 2.1.0
+Before 2.1.0 `config.yaml` was loaded as constructor arguments, which outrank
+every other source in `pydantic-settings`. The file therefore **beat** the
+environment — the opposite of what this page and the README described, and the
+opposite of what `docker-compose.yml` assumed.
+
+The practical consequences were quiet and unpleasant: an
+`AIDLP_PROXY__UPSTREAM_INSECURE=false` meant to harden a deployment could be
+undone by a stale `upstream_insecure: true` in a file, and an
+`AIDLP_DLP__ML_ENABLED=true` could be silenced into disabling ML redaction
+altogether.
+
+Since 2.1.0 the order above holds, and startup logs a warning naming every
+`config.yaml` key that an environment variable overrides.
+:::
+
+Other variables:
 
 - `VAULT_TOKEN`: Authentication token for HashiCorp Vault.
 

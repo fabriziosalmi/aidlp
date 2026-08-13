@@ -86,7 +86,11 @@ curl -x http://localhost:8080 http://httpbin.org/ip
 
 ## Configuration
 
-The proxy uses `pydantic-settings` and can be configured via `config.yaml` or Environment Variables (prefix: `AIDLP_`). Environment variables take precedence.
+The proxy uses `pydantic-settings` and can be configured via `config.yaml` or Environment Variables (prefix: `AIDLP_`).
+
+**Precedence, highest first:** environment variables → `config.yaml` → built-in defaults.
+
+> ⚠️ Before **2.1.0** this was the other way round: `config.yaml` silently beat the environment, despite this page having always claimed otherwise. If you have both, check which values actually apply after upgrading — the proxy now logs a warning naming every `config.yaml` key an environment variable overrides.
 
 ### `config.yaml`
 ```yaml

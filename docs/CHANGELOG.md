@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-13
+
+### Changed (behavioural)
+- **Environment variables now take precedence over `config.yaml`.** They always
+  should have — the README and this reference both said so — but the file was
+  loaded as constructor arguments, and those outrank every other source in
+  `pydantic-settings`. The file silently won.
+
+  This was quiet and it mattered. An `AIDLP_PROXY__UPSTREAM_INSECURE=false` set
+  to harden a deployment could be undone by a leftover `upstream_insecure: true`
+  in a file, re-disabling the certificate verification that 2.0.0 had just made
+  the default. An `AIDLP_DLP__ML_ENABLED=true` could likewise be overridden into
+  turning ML redaction off entirely, leaving static term matching as the only
+  protection with nothing reporting the downgrade.
+
+  Precedence is now, highest first: environment → `config.yaml` → defaults.
+  Sources merge key by key, so one variable no longer discards the rest of a
+  section.
+
+### Added
+- Startup logs a warning naming every `config.yaml` key that an environment
+  variable overrides, so the conflict is visible instead of silent.
+
+### Migration
+If you run with both a `config.yaml` and `AIDLP_*` variables setting the same
+keys, the effective configuration changes with this release. Check the startup
+warning to see exactly which keys are affected, and confirm the values are the
+ones you intend — particularly `proxy.upstream_insecure` and `dlp.ml_enabled`.
+
 ## [2.0.0] - 2026-08-13
 
 ### Removed (BREAKING)
