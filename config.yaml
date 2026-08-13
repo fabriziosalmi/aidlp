@@ -8,6 +8,8 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   ml_threshold: 0.5
+  # Max seconds for a single ML analysis before the request fails closed.
+  ml_timeout: 30.0
   # NLP Model to use (en_core_web_lg, en_core_web_md, en_core_web_sm)
   nlp_model: "en_core_web_sm"
   # List of entities to detect (null = all). Example: ["PERSON", "PHONE_NUMBER"]
@@ -19,9 +21,3 @@ dlp:
       token: "" # Set via VAULT_TOKEN env var
       path: "aidlp/terms"
   replacement_token: "[REDACTED]"
-
-upstream:
-  # Example: Map a fake domain to a real one, or just use as a regular forward proxy
-  # For this implementation, we'll assume it acts as a transparent/explicit proxy
-  # But we can define overrides if needed.
-  default_scheme: "https"

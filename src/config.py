@@ -23,6 +23,9 @@ class DLPConfig(BaseModel):
     static_terms_file: str = "terms.txt"
     ml_enabled: bool = True
     ml_threshold: float = 0.5
+    # Upper bound on a single ML analysis, in seconds. Exceeding it raises,
+    # which the proxy turns into a fail-closed 500 rather than a hang.
+    ml_timeout: float = 30.0
     nlp_model: str = "en_core_web_sm"
     entities: Optional[List[str]] = None
     secrets_provider: SecretsProviderConfig = Field(
@@ -38,14 +41,9 @@ class ProxyConfig(BaseModel):
     metrics_port: int = 9090
 
 
-class UpstreamConfig(BaseModel):
-    default_scheme: str = "https"
-
-
 class AppConfig(BaseSettings):
     proxy: ProxyConfig = Field(default_factory=ProxyConfig)
     dlp: DLPConfig = Field(default_factory=DLPConfig)
-    upstream: UpstreamConfig = Field(default_factory=UpstreamConfig)
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__", env_prefix="AIDLP_", extra="ignore"
