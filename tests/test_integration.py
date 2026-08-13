@@ -1,7 +1,29 @@
+import logging
 import pytest
 from unittest.mock import AsyncMock
 from mitmproxy.test import tflow
 from src.proxy_core import DLPAddon
+
+
+class _Options:
+    def __init__(self, ssl_insecure):
+        self.ssl_insecure = ssl_insecure
+
+
+def test_warns_when_upstream_verification_is_disabled(caplog):
+    """Running without upstream verification must never be silent.
+
+    mitmdump can be driven directly, bypassing the CLI's own warning, so
+    the addon checks the option it actually runs with.
+    """
+    with caplog.at_level(logging.WARNING, logger="dlp_proxy"):
+        assert DLPAddon.warn_if_upstream_unverified(_Options(True)) is True
+    assert "verification is DISABLED" in caplog.text
+
+
+def test_no_warning_when_upstream_verification_is_enabled():
+    assert DLPAddon.warn_if_upstream_unverified(_Options(False)) is False
+    assert DLPAddon.warn_if_upstream_unverified(None) is False
 
 
 def _flow(content=b"test", content_type="text/plain", path=None):

@@ -11,6 +11,26 @@ A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy
 >
 > Full documentation is available at [https://fabriziosalmi.github.io/aidlp/](https://fabriziosalmi.github.io/aidlp/) (or locally via `npm run docs:dev`).
 
+> ⚠️ **Breaking change in 2.0.0 — upstream TLS certificates are now verified**
+>
+> Up to and including 1.x, `proxy.ssl_bump` defaulted to `true` and its only
+> effect was passing `--ssl-insecure` to mitmproxy, which **disabled
+> verification of the upstream server's certificate**. The name promised TLS
+> interception; it delivered the opposite of what it sounded like. Every stock
+> deployment accepted any certificate the upstream presented, so the prompts
+> this proxy exists to protect could be intercepted in transit.
+>
+> **From 2.0.0 verification is on by default.** `ssl_bump` is deprecated and
+> inert; setting it only prints a warning. If you deliberately need to reach an
+> upstream with an untrusted certificate — a private CA, a test endpoint — opt
+> in explicitly with `proxy.upstream_insecure: true` or `--upstream-insecure`,
+> and the proxy will warn on every startup while it is on.
+>
+> **If you use a private CA upstream and do nothing, connections will now fail**
+> with a certificate error. That is the intended behaviour. See
+> [#47](https://github.com/fabriziosalmi/aidlp/issues/47) for the migration
+> notes. HTTPS interception towards *clients* is unaffected.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -73,7 +93,8 @@ The proxy uses `pydantic-settings` and can be configured via `config.yaml` or En
 proxy:
   port: 8080
   metrics_port: 9090
-  ssl_bump: true
+  # Skip upstream certificate verification. Leave false; see the note below.
+  upstream_insecure: false
 
 dlp:
   static_terms_file: "terms.txt"

@@ -9,11 +9,31 @@ from src.config import config
 app = typer.Typer()
 
 
+SSL_BUMP_DEPRECATED = (
+    "WARNING: ssl_bump is deprecated and no longer has any effect.\n"
+    "  It never enabled TLS interception, whatever the name suggested: its\n"
+    "  only effect was to disable verification of the upstream server's\n"
+    "  certificate, and it was on by default.\n"
+    "  Verification is now ON. If you genuinely need to talk to an upstream\n"
+    "  with an untrusted certificate, ask for it explicitly with\n"
+    "  --upstream-insecure (or proxy.upstream_insecure in config.yaml)."
+)
+
+UPSTREAM_INSECURE_WARNING = (
+    "WARNING: upstream TLS certificate verification is DISABLED.\n"
+    "  The proxy will accept any certificate the upstream presents, so the\n"
+    "  prompts it forwards can be intercepted and altered in transit.\n"
+    "  Redaction does not protect you from that. Use this only against a\n"
+    "  known upstream with a private CA, never on the open internet."
+)
+
+
 @app.command()
 def start(
     port: Optional[int] = None,
     host: Optional[str] = None,
-    ssl_bump: bool = True,
+    upstream_insecure: Optional[bool] = None,
+    ssl_bump: Optional[bool] = None,
 ):
     """
     Start the DLP Proxy.
@@ -21,6 +41,12 @@ def start(
     # Fall back to config.yaml / AIDLP_* env vars when not given on the CLI.
     port = port if port is not None else config.proxy.port
     host = host if host is not None else config.proxy.host
+
+    if ssl_bump is not None or config.proxy.ssl_bump is not None:
+        typer.secho(SSL_BUMP_DEPRECATED, fg=typer.colors.YELLOW, err=True)
+
+    if upstream_insecure is None:
+        upstream_insecure = config.proxy.upstream_insecure
 
     typer.echo(f"Starting DLP Proxy on {host}:{port}...")
 
@@ -41,8 +67,9 @@ def start(
         "tls_version_server_min=TLS1_2",
     ]
 
-    if ssl_bump:
+    if upstream_insecure:
         cmd.extend(["--ssl-insecure"])
+        typer.secho(UPSTREAM_INSECURE_WARNING, fg=typer.colors.RED, err=True)
 
     # Set PYTHONPATH so mitmproxy can find src modules
     env = os.environ.copy()
