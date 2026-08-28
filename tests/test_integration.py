@@ -103,7 +103,7 @@ async def test_binary_content_type_is_skipped():
     f = _flow(content=b"\x89PNG\r\n\x1a\n", content_type="image/png")
     await addon.request(f)
 
-    addon.dlp_engine.redact.assert_not_awaited()
+    addon.dlp_engine.redact.assert_not_called()
     addon.dlp_engine.shutdown()
 
 
