@@ -5,6 +5,9 @@ export default withMermaid(defineConfig({
     title: "AI DLP Proxy",
     description: "Secure LLM Gateway with Data Loss Prevention",
     base: '/aidlp/',
+    // The hostname carries the base path on purpose: VitePress joins it with each
+    // page's route, so without it every URL in the sitemap would point at a 404.
+    sitemap: { hostname: 'https://fabriziosalmi.github.io/aidlp/' },
     head: [
     // Everything this site loads is first-party. 'unsafe-inline' is required
     // because VitePress emits an inline appearance script and inline styles.
