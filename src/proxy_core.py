@@ -1,4 +1,7 @@
+import base64
 import errno
+import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -92,15 +95,83 @@ def _new_stats() -> dict:
     return {"static_replacements": 0, "ml_replacements": 0, "pii_types": {}}
 
 
+PROXY_AUTH_HEADER = "Proxy-Authorization"
+PROXY_AUTHENTICATE_HEADER = "Proxy-Authenticate"
+AUTH_REALM = 'Basic realm="aidlp"'
+
+LOOPBACK_NAMES = frozenset({"localhost", "ip6-localhost", "localhost.localdomain"})
+
+
+def is_loopback_host(host: str) -> bool:
+    """True when a listener on `host` can only be reached from this machine.
+
+    An empty string is mitmproxy's "every interface". A name we cannot
+    resolve to a literal is treated as routable: guessing in the permissive
+    direction here would quietly re-open the relay this check exists to
+    close.
+    """
+    candidate = (host or "").strip()
+    if not candidate:
+        return False
+    if candidate.lower() in LOOPBACK_NAMES:
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
+def credential_matches(header_value: str, token: str) -> bool:
+    """Constant-time comparison of a Proxy-Authorization value to the token.
+
+    Accepts `Bearer <token>` and `Basic base64(user:<token>)`. Ordinary
+    proxy clients -- curl --proxy-user, requests, browsers -- send the
+    latter, so supporting only Bearer would make the proxy unusable by the
+    tools people actually put in front of it.
+    """
+    if not token:
+        return False
+
+    scheme, _, payload = (header_value or "").partition(" ")
+    scheme = scheme.strip().lower()
+    payload = payload.strip()
+    if not payload:
+        return False
+
+    if scheme == "bearer":
+        return hmac.compare_digest(payload, token)
+
+    if scheme == "basic":
+        try:
+            decoded = base64.b64decode(payload, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return False
+        _, separator, password = decoded.partition(":")
+        if not separator:
+            return False
+        return hmac.compare_digest(password, token)
+
+    return False
+
+
 class DLPAddon:
     def __init__(self):
         self.dlp_engine = DLPEngine()
 
-        # Start Prometheus metrics server
+        # Provisional: running() re-resolves this from the address mitmproxy
+        # actually bound to, which the CLI can override.
+        self.auth_token = config.proxy.auth_token
+        self.apply_bind_policy(config.proxy.host)
+
+        # Start Prometheus metrics server. It exposes no authentication of
+        # its own, so it binds its own host -- loopback unless opened.
         metrics_port = config.proxy.metrics_port
+        metrics_host = config.proxy.metrics_host
         try:
-            start_http_server(metrics_port)
-            logger.info(f"Prometheus metrics server started on port {metrics_port}")
+            start_http_server(metrics_port, addr=metrics_host)
+            logger.info(
+                f"Prometheus metrics server started on {metrics_host}:{metrics_port}"
+            )
         except OSError as e:
             if e.errno == errno.EADDRINUSE:
                 logger.error(
@@ -135,6 +206,91 @@ class DLPAddon:
         )
         return True
 
+    def apply_bind_policy(self, listen_host: str) -> None:
+        """Decide whether to demand credentials, or refuse to relay at all.
+
+        The proxy performs no authorisation of its own, so an
+        unauthenticated listener on a routable interface is an open relay:
+        anything that can reach the port can make the proxy fetch arbitrary
+        upstreams on its behalf. Rather than assume the operator intended
+        that, refuse the traffic and say why.
+
+        The refusal is logged at CRITICAL, which mitmproxy treats as fatal
+        when it happens during startup -- so in practice the process exits
+        rather than listening at all. `deny_all` is the belt to that
+        braces: if the addon is driven some other way, every request is
+        answered 403 instead of relayed.
+        """
+        self.listen_host = listen_host
+        self.auth_required = bool(self.auth_token)
+        self.deny_all = False
+
+        if self.auth_token:
+            return
+
+        if is_loopback_host(listen_host):
+            logger.warning(
+                "No proxy.auth_token is set, so callers are not "
+                f"authenticated. Tolerated only because the proxy is bound to "
+                f"{listen_host!r}, reachable from this machine alone. Set "
+                "proxy.auth_token (AIDLP_PROXY__AUTH_TOKEN) before binding "
+                "anywhere else."
+            )
+            return
+
+        self.deny_all = True
+        logger.critical(
+            f"Refusing to relay: bound to {listen_host or 'every interface'!r} "
+            "with no proxy.auth_token set, which would be an open proxy for "
+            "anything that can reach this port. Set proxy.auth_token "
+            "(AIDLP_PROXY__AUTH_TOKEN), or bind proxy.host to loopback."
+        )
+
+    def reject_unauthenticated(self, flow: http.HTTPFlow) -> bool:
+        """Answer the flow ourselves if the caller may not use the proxy.
+
+        Returns True when the flow has been answered and must not be
+        forwarded.
+        """
+        if self.deny_all:
+            flow.response = http.Response.make(
+                403,
+                b'{"error": {"message": "Proxy refuses to relay: no '
+                b'auth_token configured for a non-loopback listener", '
+                b'"code": "proxy_misconfigured"}}',
+                {"Content-Type": "application/json"},
+            )
+            return True
+
+        if not self.auth_required:
+            return False
+
+        supplied = flow.request.headers.get(PROXY_AUTH_HEADER, "")
+        if credential_matches(supplied, self.auth_token):
+            # Never forward our own credential to the upstream.
+            if PROXY_AUTH_HEADER in flow.request.headers:
+                del flow.request.headers[PROXY_AUTH_HEADER]
+            return False
+
+        flow.response = http.Response.make(
+            407,
+            b'{"error": {"message": "Proxy authentication required", '
+            b'"code": "proxy_auth_required"}}',
+            {
+                "Content-Type": "application/json",
+                PROXY_AUTHENTICATE_HEADER: AUTH_REALM,
+            },
+        )
+        return True
+
+    def http_connect(self, flow: http.HTTPFlow):
+        """Authorise the CONNECT before the tunnel exists.
+
+        Checking only in request() would let an unauthenticated caller open
+        the tunnel first and be refused per-request afterwards.
+        """
+        self.reject_unauthenticated(flow)
+
     def running(self):
         try:
             options = ctx.options
@@ -142,6 +298,10 @@ class DLPAddon:
             # Not running under a mitmproxy master (unit tests, imports).
             options = None
         self.warn_if_upstream_unverified(options)
+        if options is not None:
+            # listen_host is the address actually bound; the CLI can override
+            # config.proxy.host, so the runtime value is the authority.
+            self.apply_bind_policy(getattr(options, "listen_host", "") or "")
         self.dlp_engine.start_workers()
 
     async def request(self, flow: http.HTTPFlow):
@@ -175,6 +335,12 @@ class DLPAddon:
                 flow.response = http.Response.make(
                     503, b"Service Unavailable", {"Content-Type": "text/plain"}
                 )
+            return
+
+        # Authorise the caller before doing anything on its behalf. The
+        # health probe above is deliberately exempt: it reveals nothing and
+        # container health checks run without credentials.
+        if self.reject_unauthenticated(flow):
             return
 
         content = flow.request.content

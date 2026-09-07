@@ -11,6 +11,24 @@ A high-performance, enterprise-grade HTTP/HTTPS Data Loss Prevention (DLP) proxy
 >
 > Full documentation is available at [https://fabriziosalmi.github.io/aidlp/](https://fabriziosalmi.github.io/aidlp/) (or locally via `npm run docs:dev`).
 
+> ⚠️ **Breaking change in 3.0.0 — the proxy no longer relays for anonymous callers**
+>
+> `aidlp` performs no authorisation of its own: any caller able to open a
+> connection could make it fetch whatever upstream a request named, and read its
+> unauthenticated Prometheus endpoint. The default bind was `0.0.0.0`, so that
+> was reachable from the whole network.
+>
+> From 3.0.0 `proxy.host` and `proxy.metrics_host` default to `127.0.0.1`, and
+> binding a routable interface **without** `proxy.auth_token` makes the process
+> refuse to start rather than serve as an open proxy. With a token set, callers send
+> `Proxy-Authorization: Bearer <token>` (or `Basic base64(anyuser:<token>)`); the
+> header is stripped before forwarding, so the secret never reaches the upstream.
+> `/_health` stays open for container health checks.
+>
+> `docker-compose.yml` now publishes to loopback only and requires
+> `AIDLP_PROXY_AUTH_TOKEN` and `GF_SECURITY_ADMIN_PASSWORD` — see `.env.example`.
+> The Grafana `admin` default password is gone.
+
 > ⚠️ **Breaking change in 2.0.0 — upstream TLS certificates are now verified**
 >
 > Up to and including 1.x, `proxy.ssl_bump` defaulted to `true` and its only
@@ -80,9 +98,15 @@ poetry run python src/cli.py start --port 8080
 
 ### Docker Deployment
 ```bash
+cp .env.example .env          # then fill in both secrets
 docker-compose up --build -d
-curl -x http://localhost:8080 http://httpbin.org/ip
+curl -x http://localhost:8080 \
+     --proxy-header "Proxy-Authorization: Bearer $AIDLP_PROXY_AUTH_TOKEN" \
+     http://httpbin.org/ip
 ```
+Compose publishes to `127.0.0.1` only and refuses to start until
+`AIDLP_PROXY_AUTH_TOKEN` and `GF_SECURITY_ADMIN_PASSWORD` are set — neither has
+a fallback, so nothing ships with a credential everybody already knows.
 
 ## Configuration
 
@@ -96,7 +120,12 @@ The proxy uses `pydantic-settings` and can be configured via `config.yaml` or En
 ```yaml
 proxy:
   port: 8080
+  # Loopback by default; widening it requires an auth_token (see below).
+  host: 127.0.0.1
   metrics_port: 9090
+  metrics_host: 127.0.0.1
+  # Shared secret for Proxy-Authorization. Prefer AIDLP_PROXY__AUTH_TOKEN.
+  # auth_token: null
   # Skip upstream certificate verification. Leave false; see the note below.
   upstream_insecure: false
 

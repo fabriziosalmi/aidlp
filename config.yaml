@@ -1,7 +1,17 @@
 proxy:
   port: 8080
-  host: 0.0.0.0
+  # Loopback only. The proxy authenticates nobody unless auth_token is set,
+  # so a wider bind would be an open relay for anything that can reach this
+  # machine. Binding elsewhere without a token is refused outright.
+  host: 127.0.0.1
   metrics_port: 9090
+  # The Prometheus endpoint is unauthenticated; kept off the network on its
+  # own knob so exposing the proxy does not silently expose the metrics.
+  metrics_host: 127.0.0.1
+  # Shared secret callers must present as `Proxy-Authorization: Bearer <token>`
+  # or `Basic base64(user:<token>)`. Required to bind anything but loopback.
+  # Supply it via AIDLP_PROXY__AUTH_TOKEN rather than committing it here.
+  # auth_token: null
   # Skip verification of the upstream server's certificate. Leave this false.
   # Turning it on accepts ANY certificate, so the prompts the proxy forwards
   # can be intercepted and altered in transit -- redaction does not protect

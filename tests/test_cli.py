@@ -13,12 +13,27 @@ runner = CliRunner()
 def test_start_default(mock_run):
     result = runner.invoke(app, ["start"])
     assert result.exit_code == 0
-    assert "Starting DLP Proxy on 0.0.0.0:8080" in result.output
+    assert "Starting DLP Proxy on 127.0.0.1:8080" in result.output
     mock_run.assert_called_once()
     cmd = mock_run.call_args[0][1]
     assert "mitmdump" in cmd
     assert "-p" in cmd
     assert "8080" in cmd
+
+
+@patch("src.cli.os.execvpe")
+def test_start_binds_loopback_by_default(mock_run):
+    """The default listener must not be reachable from the network.
+
+    The proxy authorises nobody unless proxy.auth_token is set, so a wider
+    default bind was an open relay for any host that could reach the
+    machine.
+    """
+    runner.invoke(app, ["start"])
+    cmd = mock_run.call_args[0][1]
+    assert "--listen-host" in cmd
+    assert cmd[cmd.index("--listen-host") + 1] == "127.0.0.1"
+    assert "0.0.0.0" not in cmd
 
 
 @patch("src.cli.os.execvpe")
@@ -37,7 +52,7 @@ def test_start_verifies_upstream_by_default(mock_run):
 def test_start_custom_port(mock_run):
     result = runner.invoke(app, ["start", "--port", "9000"])
     assert result.exit_code == 0
-    assert "Starting DLP Proxy on 0.0.0.0:9000" in result.output
+    assert "Starting DLP Proxy on 127.0.0.1:9000" in result.output
     cmd = mock_run.call_args[0][1]
     assert "9000" in cmd
 
