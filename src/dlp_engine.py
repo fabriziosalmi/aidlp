@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import asyncio
 import hvac
 import pybreaker
@@ -37,6 +38,48 @@ def _merge_spans(spans: list) -> list:
     return merged
 
 
+MAX_TERM_LENGTH = 512
+
+# C0 and C1 control characters. A redaction keyword holding a NUL or a stray
+# \x08 is corruption, not a term someone meant to write.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def validate_terms(raw_terms, source: str) -> list[str]:
+    """Keep only entries that can meaningfully act as redaction keywords.
+
+    Every non-blank line used to become a keyword verbatim, so a half-written
+    line from an interrupted append surfaced later as wrong redaction
+    behaviour instead of as something an operator could act on at load time.
+
+    Rejected entries are logged by reason and position only -- never by
+    content, because these are secrets.
+    """
+    valid: list[str] = []
+
+    for index, raw in enumerate(raw_terms, start=1):
+        term = raw.strip()
+        if not term:
+            continue  # blank padding, not corruption
+
+        if len(term) > MAX_TERM_LENGTH:
+            logger.warning(
+                f"Skipping term {index} from {source}: {len(term)} characters "
+                f"exceeds the {MAX_TERM_LENGTH} limit"
+            )
+            continue
+
+        if _CONTROL_CHARACTERS.search(term):
+            logger.warning(
+                f"Skipping term {index} from {source}: contains control characters"
+            )
+            continue
+
+        valid.append(term)
+
+    return valid
+
+
 class TermFetchError(Exception):
     """Raised when a provider cannot supply a usable term list.
 
@@ -49,19 +92,45 @@ class TermProvider:
     def get_terms(self) -> list[str]:
         raise NotImplementedError
 
+    def fingerprint(self):
+        """Cheap change signal for the poller; None means "always reload"."""
+        return None
+
 
 class FileTermProvider(TermProvider):
+    DEFAULT_TERMS = ("password", "secret", "api_key")
+
     def __init__(self, file_path: str):
         self.file_path = file_path
 
     def get_terms(self) -> list[str]:
-        if not os.path.exists(self.file_path):
-            with open(self.file_path, "w") as f:
-                f.write("password\nsecret\napi_key\n")
-            return ["password", "secret", "api_key"]
+        """Return the raw lines of the terms file.
 
-        with open(self.file_path, "r") as f:
-            return [line.strip() for line in f if line.strip()]
+        Validation lives in validate_terms(), which the engine applies to
+        every provider: a corrupt entry is corrupt whether it arrived from
+        disk or from Vault.
+        """
+        if not os.path.exists(self.file_path):
+            with open(self.file_path, "w", encoding="utf-8") as f:
+                f.write("".join(f"{term}\n" for term in self.DEFAULT_TERMS))
+            return list(self.DEFAULT_TERMS)
+
+        try:
+            with open(self.file_path, "r", encoding="utf-8") as f:
+                return f.read().splitlines()
+        except UnicodeDecodeError as e:
+            # Treated as a fetch failure so the engine keeps the last known
+            # good terms rather than redacting from a mangled file.
+            raise TermFetchError(
+                f"{self.file_path} is not valid UTF-8 ({e})"
+            ) from e
+
+    def fingerprint(self):
+        try:
+            stat = os.stat(self.file_path)
+        except OSError:
+            return None
+        return (stat.st_mtime_ns, stat.st_size)
 
 
 class VaultTermProvider(TermProvider):
@@ -121,6 +190,8 @@ class DLPEngine:
 
         self._term_provider = None
         self._terms_loaded = False
+        self._terms_fingerprint = None
+        self.reload_interval = config.dlp.reload_interval
 
         self.analyzer = None
         if self.ml_enabled:
@@ -144,8 +215,12 @@ class DLPEngine:
             for _ in range(4):
                 self.workers.append(asyncio.create_task(self._ml_worker()))
 
-        if config.dlp.secrets_provider.type == "vault" and not self.poller_task:
-            self.poller_task = asyncio.create_task(self._vault_poller())
+        if not self.poller_task:
+            # Every provider gets a poller, not only Vault. The file provider
+            # had none, so `aidlp add-term` changed terms.txt while a running
+            # proxy kept redacting from its original in-memory set -- exactly
+            # what the CLI told the operator would not happen.
+            self.poller_task = asyncio.create_task(self._term_poller())
 
     def shutdown(self):
         for worker in self.workers:
@@ -153,11 +228,16 @@ class DLPEngine:
         if self.poller_task:
             self.poller_task.cancel()
 
-    async def _vault_poller(self):
+    async def _term_poller(self):
         while True:
-            await asyncio.sleep(60)
-            logger.info("Polling Vault for new terms...")
-            self.reload_config()
+            await asyncio.sleep(self.reload_interval)
+            try:
+                self.reload_config()
+            except Exception as e:
+                # A poller that dies takes every future reload with it, in
+                # silence. CancelledError is a BaseException, so shutdown
+                # still stops this loop.
+                logger.error(f"Scheduled term reload failed: {e}")
 
     async def _ml_worker(self):
         while True:
@@ -211,9 +291,25 @@ class DLPEngine:
 
         return self._term_provider
 
-    def reload_config(self):
+    def reload_config(self, force: bool = False):
+        source = config.dlp.secrets_provider.type
+
         try:
-            terms = self._get_provider().get_terms()
+            provider = self._get_provider()
+            fingerprint = provider.fingerprint()
+
+            # The poller runs on every provider now, so skip the rebuild when
+            # the source demonstrably has not changed. A provider that cannot
+            # answer cheaply returns None and is always reloaded.
+            if (
+                not force
+                and self._terms_loaded
+                and fingerprint is not None
+                and fingerprint == self._terms_fingerprint
+            ):
+                return
+
+            raw_terms = provider.get_terms()
         except TermFetchError as e:
             if not self._terms_loaded:
                 # Nothing to fall back on. Starting up with an empty keyword
@@ -222,13 +318,16 @@ class DLPEngine:
             logger.error(f"Term reload failed ({e}); keeping previously loaded terms")
             return
 
+        terms = validate_terms(raw_terms, source)
+
         new_kp = KeywordProcessor()
         for term in terms:
             new_kp.add_keyword(term, term)
 
         self.keyword_processor = new_kp
         self._terms_loaded = True
-        logger.info(f"Loaded {len(terms)} terms from {config.dlp.secrets_provider.type}")
+        self._terms_fingerprint = fingerprint
+        logger.info(f"Loaded {len(terms)} terms from {source}")
 
     async def _analyze_ml(self, text: str, spans: list, stats: dict) -> None:
         future = asyncio.get_running_loop().create_future()

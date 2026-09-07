@@ -30,6 +30,10 @@ class DLPConfig(BaseModel):
     # Upper bound on a single ML analysis, in seconds. Exceeding it raises,
     # which the proxy turns into a fail-closed 500 rather than a hang.
     ml_timeout: float = 30.0
+    # How often the background poller re-reads the term source, in seconds.
+    # Applies to the file provider as well as Vault, so `aidlp add-term`
+    # reaches a running proxy without a restart.
+    reload_interval: float = 60.0
     nlp_model: str = "en_core_web_sm"
     entities: Optional[List[str]] = None
     secrets_provider: SecretsProviderConfig = Field(

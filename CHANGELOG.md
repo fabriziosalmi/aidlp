@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-09-07
+
+### Fixed
+- **`terms.txt` is now written atomically.** `aidlp add-term` appended in place,
+  so a kill between `open()` and the buffered write reaching disk could leave
+  anything from no change at all to a truncated trailing line — which the next
+  start loaded as a redaction keyword. The CLI now snapshots the current file to
+  `terms.txt.bak`, writes the full contents to a temp file in the same
+  directory, `fsync`s it, and renames it into place, `fsync`ing the directory so
+  the rename itself is durable. It also no longer writes a leading blank line.
+- **The file provider is polled too.** `start_workers()` created the reload task
+  only when the secrets provider was `vault`, so after `aidlp add-term` a
+  running proxy kept redacting from its original in-memory keyword set
+  indefinitely — while the CLI told the operator to "wait for hot-reload". Every
+  provider now gets a poller. The file provider is checked by mtime and size, so
+  an untouched file costs a `stat` rather than a rebuilt keyword set.
+- **Loaded terms are validated.** Every non-blank line became a keyword
+  verbatim, so a corrupted entry surfaced later as wrong redaction behaviour
+  instead of a load-time error. Entries over 512 characters, or containing
+  control characters, are now skipped with a warning naming the position and
+  reason — never the term itself, since these are secrets. A `terms.txt` that is
+  not valid UTF-8 is treated as a failed fetch, so the engine keeps its last
+  known-good keywords.
+
+### Added
+- `terms.txt.bak`, written before every mutating write, with the restore
+  procedure documented in the configuration reference and the deployment guide
+  and covered by a test. There was previously no way, coded or documented, to
+  recover a damaged terms file.
+- `dlp.reload_interval` (default `60.0`): how often the poller re-reads the term
+  source. Previously hardcoded to 60 seconds inside the Vault-only poller.
 ## [3.0.0] - 2026-09-07
 
 ### ⚠️ BREAKING: the proxy no longer relays for anonymous callers
