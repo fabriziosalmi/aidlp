@@ -55,7 +55,9 @@ async def test_worker_survives_cancelled_caller(dlp_engine):
     # Enough cancellations to hit every worker, not just one of the four.
     for _ in range(len(dlp_engine.workers) * 2):
         fut = loop.create_future()
-        await dlp_engine.task_queue.put(("This is a secret password.", fut))
+        # The queue item carries the correlation id as of the request_id
+        # threading, so the worker can name the request in its error logs.
+        await dlp_engine.task_queue.put(("This is a secret password.", fut, "test-rid"))
         fut.cancel()
         await asyncio.sleep(0.05)  # let a worker pick it up and try to answer
 

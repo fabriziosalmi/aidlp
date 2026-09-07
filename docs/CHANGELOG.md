@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-09-07
+
+Sweep of the remaining audit findings. Two changes alter an existing contract,
+hence the major.
+
+### ⚠️ BREAKING
+- **Unknown keys inside a config section are now rejected.** `ProxyConfig`,
+  `DLPConfig`, `SecretsProviderConfig` and `VaultConfig` set `extra="forbid"`,
+  so a misspelled nested key fails at startup instead of being dropped while
+  the default silently applied. Unknown *top-level* sections are still ignored
+  (a stray `AIDLP_*` variable must not stop the proxy) but are now named in a
+  startup warning.
+- **`GET /_health` returns JSON, not plain text.** The body is
+  `{"status", "version", "details"}`. A probe matching on the literal `OK`
+  needs updating; one checking the status code does not.
+
+### Fixed
+- `secrets_provider.type` is a `Literal["file","vault"]`, and `type: vault`
+  without a `vault:` section is rejected. `"Vault"`, `"VAULT"` or a typo used
+  to fall through to the file provider silently.
+- `ml_threshold` is constrained to `[0, 1]`. Above 1.0 every score comparison
+  was false, so ML redaction stopped flagging anything while stats looked
+  normal.
+- `DLPAddon.done()` now shuts the engine down; it previously only logged, so
+  the worker tasks and the poller outlived the addon.
+- `shutdown()` resets `workers`/`poller_task`, so a later `start_workers()`
+  actually respawns. It used to see the cancelled-but-non-empty lists as live
+  and spawn nothing, leaving an engine with no workers at all. `aclose()` is
+  the awaiting variant; `done()` cannot be async because mitmproxy triggers
+  DoneHook through `invoke_addon_sync`, which rejects coroutine hooks.
+- Enqueueing for ML analysis is bounded by `ml_timeout`. With a full queue the
+  `put()` blocked forever, hanging the request instead of failing closed.
+- A stuck ML worker is recycled by a watchdog. `asyncio.to_thread` cannot be
+  cancelled, so one pathological input used to occupy a worker indefinitely
+  and drain a fixed pool to zero capacity.
+- A missing terms file is announced. Seeding three placeholder words looked
+  exactly like a successful load.
+- The 413 response uses the documented `{"error": {...}}` JSON shape.
+- Every flow is counted before the inspection gate; requests with neither body
+  nor query string passed through completely untelemetered.
+- Redaction substitutes in one pass instead of repeated slice-assignment, so
+  cost no longer grows with spans x text length.
+- `docker-compose.yml` mounts `terms.txt` and `config.yaml`, and the CA volume
+  points at `/home/appuser/.mitmproxy` — the image runs as `appuser`, so the
+  documented `/root/.mitmproxy` persisted nothing and the CA was regenerated
+  on every recreate.
+- Both Dockerfile stages are pinned by digest, and the build backend is
+  constrained, so the same commit rebuilds to the same artefact.
+- CLI failures exit with distinct codes (3 mitmdump missing, 4 empty term,
+  5 Vault-managed terms) instead of all returning 1.
+
+### Added
+- `--version` and a `version` command; the running version also appears in the
+  `/_health` body. A test asserts it never drifts from `pyproject.toml`.
+- `dlp.ml_workers` and `dlp.ml_queue_maxsize`: the pool size and queue depth
+  were literals in the source.
+- Metrics for the quiet failures: `dlp_term_reload_failures_total`,
+  `dlp_terms_last_reload_success_timestamp_seconds`, `dlp_term_poller_alive`,
+  `dlp_ml_workers_alive`, `dlp_ml_worker_restarts_total`, `dlp_flows_seen_total`.
+- `/_health` consults real state: terms loaded and fresh, circuit breaker,
+  worker liveness, poller liveness.
+- The request correlation id reaches the engine, so an ML failure names the
+  request that caused it.
+- `DLPEngine(dlp_config=...)` takes its configuration by parameter instead of
+  reading the global singleton, and metrics startup moved out of the addon
+  constructor into `build_addon()`.
+
+### Documentation
+- `architecture.md` no longer claims the two extraction passes run in
+  parallel; they are sequential within a request, and it says why that does
+  not cost accuracy.
+- The published image bundles only `en_core_web_sm`; the config reference now
+  says so next to the `nlp_model` options.
+- `/_health` is documented, and the availability consequences of the
+  single-instance reference deployment are stated.
+
 ## [3.1.0] - 2026-09-07
 
 ### Fixed

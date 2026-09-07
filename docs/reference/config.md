@@ -73,7 +73,7 @@ Generate a token with `openssl rand -hex 32` and supply it via
 | `ml_enabled` | `bool` | `true` | Enables the ML-based PII detection engine (Presidio). |
 | `reload_interval` | `float` | `60.0` | How often the background poller re-reads the term source, in seconds. Applies to the file provider as well as Vault. |
 | `ml_threshold` | `float` | `0.5` | Confidence threshold (0.0-1.0). Higher values reduce false positives but may miss some PII. |
-| `nlp_model` | `string` | `en_core_web_sm` | SpaCy model to use. Options: `en_core_web_lg` (accurate), `en_core_web_sm` (fast). |
+| `nlp_model` | `string` | `en_core_web_sm` | SpaCy model to use. Options: `en_core_web_lg` (accurate), `en_core_web_sm` (fast). **The published Docker image bundles only `en_core_web_sm`** — see the note below. |
 | `entities` | `list` | `null` | List of entities to detect (e.g., `["PERSON", "EMAIL_ADDRESS"]`). `null` detects all supported types. |
 | `replacement_token` | `string` | `[REDACTED]` | The string used to replace sensitive data. |
 | `secrets_provider.type` | `string` | `file` | Source of static terms. Options: `file`, `vault`. |
@@ -104,6 +104,18 @@ than 512 characters or containing control characters are skipped with a warning
 naming the position and reason (never the term itself, since these are secrets).
 A `terms.txt` that is not valid UTF-8 is treated as a failed fetch, so the proxy
 keeps its last known-good keywords rather than redacting from a mangled file.
+
+::: warning `en_core_web_lg` needs a custom image
+The Dockerfile installs only `en_core_web_sm`, to keep the image from growing
+by roughly 800MB. Setting `nlp_model: en_core_web_lg` and deploying via
+`docker-compose` therefore fails at startup with a "model not found" error, and
+the fix the troubleshooting guide suggests — `python -m spacy download
+en_core_web_lg` — cannot be run inside the shipped container: the final stage
+has no pip, no poetry and no build tools.
+
+To use the large model, build your own image with the extra
+`pip install --no-deps <en_core_web_lg wheel>` line, or run outside Docker.
+:::
 
 ## Environment Variables
 

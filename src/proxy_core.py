@@ -6,6 +6,7 @@ import json
 import logging
 import os
 from mitmproxy import ctx, http
+from src import __version__ as AIDLP_VERSION
 from src.dlp_engine import DLPEngine
 from src.config import config
 from prometheus_client import start_http_server, Counter, Histogram, Gauge
@@ -51,6 +52,10 @@ LATENCY = Histogram(
         7.5,
         10.0,
     ],
+)
+FLOWS_SEEN_TOTAL = Counter(
+    "dlp_flows_seen_total",
+    "Every request the addon saw, whether or not it was inspected",
 )
 ACTIVE_CONNECTIONS = Gauge(
     "dlp_active_connections", "Number of currently active connections"
@@ -154,35 +159,39 @@ def credential_matches(header_value: str, token: str) -> bool:
     return False
 
 
+def start_metrics_server() -> None:
+    """Start the Prometheus listener.
+
+    Lives outside DLPAddon so constructing the addon has no side effects on
+    the network -- wiring and request handling are separate concerns.
+    """
+    metrics_port = config.proxy.metrics_port
+    metrics_host = config.proxy.metrics_host
+    try:
+        start_http_server(metrics_port, addr=metrics_host)
+        logger.info(
+            f"Prometheus metrics server started on {metrics_host}:{metrics_port}"
+        )
+    except OSError as e:
+        if e.errno == errno.EADDRINUSE:
+            logger.error(
+                f"Failed to start Prometheus server on port {metrics_port}: "
+                "Address already in use. Metrics will not be available."
+            )
+        else:
+            logger.error(f"Failed to start Prometheus server: {e}")
+    except Exception as e:
+        logger.error(f"Failed to start Prometheus server: {e}")
+
+
 class DLPAddon:
-    def __init__(self):
-        self.dlp_engine = DLPEngine()
+    def __init__(self, dlp_engine=None):
+        self.dlp_engine = dlp_engine if dlp_engine is not None else DLPEngine()
 
         # Provisional: running() re-resolves this from the address mitmproxy
         # actually bound to, which the CLI can override.
         self.auth_token = config.proxy.auth_token
         self.apply_bind_policy(config.proxy.host)
-
-        # Start Prometheus metrics server. It exposes no authentication of
-        # its own, so it binds its own host -- loopback unless opened.
-        metrics_port = config.proxy.metrics_port
-        metrics_host = config.proxy.metrics_host
-        try:
-            start_http_server(metrics_port, addr=metrics_host)
-            logger.info(
-                f"Prometheus metrics server started on {metrics_host}:{metrics_port}"
-            )
-        except OSError as e:
-            if e.errno == errno.EADDRINUSE:
-                logger.error(
-                    f"Failed to start Prometheus server on port "
-                    f"{metrics_port}: "
-                    "Address already in use. Metrics will not be available."
-                )
-            else:
-                logger.error(f"Failed to start Prometheus server: {e}")
-        except Exception as e:
-            logger.error(f"Failed to start Prometheus server: {e}")
         logger.info("DLP Engine initialized")
 
     @staticmethod
@@ -318,23 +327,23 @@ class DLPAddon:
             request_id = os.urandom(16).hex()
             flow.request.headers["X-Request-ID"] = request_id
 
-        # Health Probe
+        # Health Probe. Reports the subsystems that fail quietly -- term
+        # staleness, circuit breaker, worker liveness -- not just whether the
+        # analyzer object was built at startup.
         if flow.request.path == "/_health" and flow.request.method == "GET":
-            is_healthy = True
-            # Check Vault (if used) - simplified check if engine is initialized
-            # In a real scenario, we might ping Vault here.
-            # Check Model
-            if not self.dlp_engine.analyzer:
-                is_healthy = False
-
-            if is_healthy:
-                flow.response = http.Response.make(
-                    200, b"OK", {"Content-Type": "text/plain"}
-                )
-            else:
-                flow.response = http.Response.make(
-                    503, b"Service Unavailable", {"Content-Type": "text/plain"}
-                )
+            healthy, details = self.dlp_engine.health_report()
+            body = json.dumps(
+                {
+                    "status": "ok" if healthy else "unhealthy",
+                    "version": AIDLP_VERSION,
+                    "details": details,
+                }
+            ).encode()
+            flow.response = http.Response.make(
+                200 if healthy else 503,
+                body,
+                {"Content-Type": "application/json"},
+            )
             return
 
         # Authorise the caller before doing anything on its behalf. The
@@ -342,6 +351,11 @@ class DLPAddon:
         # container health checks run without credentials.
         if self.reject_unauthenticated(flow):
             return
+
+        # Counted before the inspection gate below: a request with neither a
+        # body nor a query string used to pass through completely
+        # untelemetered, so traffic dashboards silently undercounted.
+        FLOWS_SEEN_TOTAL.inc()
 
         content = flow.request.content
 
@@ -352,7 +366,10 @@ class DLPAddon:
                 extra={"request_id": request_id, "size": len(content)},
             )
             flow.response = http.Response.make(
-                413, b"Request Entity Too Large", {"Content-Type": "text/plain"}
+                413,
+                b'{"error": {"message": "Request Entity Too Large", '
+                b'"code": "request_too_large"}}',
+                {"Content-Type": "application/json"},
             )
             return
 
@@ -369,21 +386,23 @@ class DLPAddon:
                 flow, inspect_body=inspect_body, inspect_query=inspect_query
             )
 
-    async def _redact_json_tree(self, obj, stats: dict):
+    async def _redact_json_tree(self, obj, stats: dict, request_id: str):
         if isinstance(obj, dict):
             for k, v in obj.items():
-                obj[k] = await self._redact_json_tree(v, stats)
+                obj[k] = await self._redact_json_tree(v, stats, request_id)
         elif isinstance(obj, list):
             for i, v in enumerate(obj):
-                obj[i] = await self._redact_json_tree(v, stats)
+                obj[i] = await self._redact_json_tree(v, stats, request_id)
         elif isinstance(obj, str):
             # Only redact string values, preserving structure and NLP context!
-            red_str, s = await self.dlp_engine.redact(obj)
+            red_str, s = await self.dlp_engine.redact(obj, request_id)
             _merge_stats(stats, s)
             return red_str
         return obj
 
-    async def _redact_body(self, flow: http.HTTPFlow, stats: dict) -> bool:
+    async def _redact_body(
+        self, flow: http.HTTPFlow, stats: dict, request_id: str
+    ) -> bool:
         """Redact the request body in place. Returns True if it changed."""
         # strict=False so an undecodable byte does not fail the whole request
         # closed. The body is only written back when something was redacted.
@@ -397,14 +416,17 @@ class DLPAddon:
                 data = json.loads(content_str)
             except json.JSONDecodeError:
                 # Fallback for malformed JSON
-                redacted_content, s = await self.dlp_engine.redact(content_str)
+                redacted_content, s = await self.dlp_engine.redact(
+                    content_str, request_id
+                )
                 _merge_stats(stats, s)
             else:
                 redacted_content = json.dumps(
-                    await self._redact_json_tree(data, stats), ensure_ascii=False
+                    await self._redact_json_tree(data, stats, request_id),
+                    ensure_ascii=False,
                 )
         else:
-            redacted_content, s = await self.dlp_engine.redact(content_str)
+            redacted_content, s = await self.dlp_engine.redact(content_str, request_id)
             _merge_stats(stats, s)
 
         TOKEN_USAGE_TOTAL.labels(direction="input").inc(len(content_str) / 4)
@@ -417,7 +439,9 @@ class DLPAddon:
         TOKEN_USAGE_TOTAL.labels(direction="output").inc(len(redacted_content) / 4)
         return True
 
-    async def _redact_query(self, flow: http.HTTPFlow, stats: dict) -> bool:
+    async def _redact_query(
+        self, flow: http.HTTPFlow, stats: dict, request_id: str
+    ) -> bool:
         """Redact query-string values in place. Returns True if any changed."""
         items = list(flow.request.query.items(multi=True))
         if not items:
@@ -426,7 +450,7 @@ class DLPAddon:
         changed = False
         redacted_items = []
         for key, value in items:
-            red_value, s = await self.dlp_engine.redact(value)
+            red_value, s = await self.dlp_engine.redact(value, request_id)
             _merge_stats(stats, s)
             changed = changed or red_value != value
             redacted_items.append((key, red_value))
@@ -461,9 +485,9 @@ class DLPAddon:
 
             with LATENCY.time():
                 if inspect_query:
-                    changed |= await self._redact_query(flow, stats)
+                    changed |= await self._redact_query(flow, stats, request_id)
                 if inspect_body:
-                    changed |= await self._redact_body(flow, stats)
+                    changed |= await self._redact_body(flow, stats, request_id)
 
             if changed:
                 REDACTED_TOTAL.inc()
@@ -497,7 +521,22 @@ class DLPAddon:
         pass
 
     def done(self):
+        """Stop the engine's background tasks.
+
+        Cannot be async: mitmproxy triggers DoneHook through
+        invoke_addon_sync() when an addon is removed or the chain is
+        cleared, and that path raises on a coroutine hook. shutdown()
+        cancels and resets synchronously; a worker already inside
+        asyncio.to_thread cannot be interrupted either way.
+        """
         logger.info("Shutting down DLP Proxy...")
+        self.dlp_engine.shutdown()
 
 
-addons = [DLPAddon()]
+def build_addon() -> DLPAddon:
+    """Composition root: build the engine, start metrics, return the addon."""
+    start_metrics_server()
+    return DLPAddon(DLPEngine())
+
+
+addons = [build_addon()]

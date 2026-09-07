@@ -22,10 +22,12 @@ def addon():
     with patch("src.proxy_core.DLPEngine") as MockEngine:
         engine = MockEngine.return_value
 
-        async def redact(text):
+        async def redact(text, request_id="unknown"):
             return text, {}
 
         engine.redact = redact
+        # The health probe now consults real subsystem state.
+        engine.health_report = lambda: (True, {"terms_loaded": True})
         yield DLPAddon()
 
 
@@ -215,11 +217,17 @@ def test_connect_passes_with_valid_credentials(addon):
 
 
 def test_metrics_server_binds_its_configured_host():
-    """The Prometheus endpoint is unauthenticated; it must not default wide."""
+    """The Prometheus endpoint is unauthenticated; it must not default wide.
+
+    Starting it moved out of DLPAddon.__init__ into the composition root, so
+    building the addon no longer has network side effects.
+    """
+    from src.proxy_core import build_addon
+
     with patch("src.proxy_core.DLPEngine"), patch(
         "src.proxy_core.start_http_server"
     ) as start:
-        DLPAddon()
+        build_addon()
 
     _, kwargs = start.call_args
     assert kwargs["addr"] == "127.0.0.1"

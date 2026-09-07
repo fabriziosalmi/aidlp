@@ -19,8 +19,13 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml
       - ./terms.txt:/app/terms.txt
-      # Persist CA certs to avoid regeneration
-      - ./certs:/root/.mitmproxy
+      # Persist CA certs to avoid regeneration.
+      # The image runs as appuser (useradd -m), and mitmproxy stores its CA
+      # under $HOME/.mitmproxy -- so this is /home/appuser/.mitmproxy, NOT
+      # /root/.mitmproxy. Mounting the wrong path silently persists nothing:
+      # the CA is regenerated on every container recreate, invalidating every
+      # client that trusted the previous one.
+      - ./certs:/home/appuser/.mitmproxy
     environment:
       - VAULT_TOKEN=${VAULT_TOKEN}
       # Inside the container the proxy must bind every interface for the
@@ -69,6 +74,22 @@ Deploy as a standalone Service/Deployment.
 - **Cons**: Extra network hop.
 
 **Recommended**: Centralized Gateway for initial rollout to simplify certificate management.
+
+## Availability
+
+The reference `docker-compose.yml` and the Kubernetes "Centralized Gateway"
+pattern below both run a **single** proxy instance, inline on every client
+request. If that process dies, clients routed through it lose their path to
+the LLM endpoint entirely — the proxy fails *closed* at the network level,
+because there is no path around it. Nothing silently bypasses redaction, but
+nothing gets through either.
+
+That is the right failure direction for a DLP control, and the wrong one for
+availability. For production, run several instances behind a load balancer and
+give the orchestrator a restart policy; the proxy keeps no cross-request state,
+so instances are interchangeable. The only per-instance state is the mitmproxy
+CA, which every replica must share — mount the same CA directory into all of
+them, or clients will reject whichever replica they did not trust.
 
 ## Terms File Durability
 
