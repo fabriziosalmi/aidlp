@@ -1,5 +1,9 @@
-# Build stage
-FROM python:3.12-slim as builder
+# Build stage.
+# Pinned by digest, not the floating 3.12-slim tag: the same commit rebuilt
+# weeks apart otherwise picks up a different Debian slim (different glibc /
+# openssl patch level, different Python 3.12.x) and produces a different
+# artefact from identical source. Bump deliberately.
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
 
 WORKDIR /app
 
@@ -29,7 +33,21 @@ RUN pip install --no-cache-dir --no-deps --prefix=/install \
     "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
 
 # Final stage
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+
+# Traceability on every build path, not just the tag-triggered workflow where
+# docker/metadata-action adds its own labels. A plain `docker build .` or the
+# documented `docker-compose build` produced an image whose `docker inspect`
+# named no commit at all. Pass with:
+#   --build-arg VCS_REF=$(git rev-parse HEAD) --build-arg VERSION=4.0.0
+ARG VCS_REF=unknown
+ARG VERSION=unknown
+LABEL org.opencontainers.image.title="aidlp" \
+      org.opencontainers.image.description="DLP proxy for LLM endpoints" \
+      org.opencontainers.image.source="https://github.com/fabriziosalmi/aidlp" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${VERSION}"
 
 # Install dumb-init for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && \

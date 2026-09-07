@@ -69,7 +69,7 @@ The **AI DLP Proxy** acts as a secure gateway, intercepting traffic to LLM provi
 - **Parallel Redaction Engine**: Runs Static analysis (FlashText) and ML analysis (Presidio/SpaCy) concurrently on the original text, merging offsets before applying redactions to preserve the NLP context window.
 - **Asynchronous Worker Queue**: Heavy ML inferences are offloaded to a bounded `asyncio.Queue` with dedicated persistent workers, preventing OOM and thread-thrashing under high concurrency.
 - **Atomic Hot-Reload**: Automatically polls HashiCorp Vault (or files) every 60 seconds and swaps redaction terms atomically, guaranteeing zero-downtime secret rotation.
-- **Strict Pydantic Validation**: Configuration is deeply validated via `pydantic-settings`, with full support for `AIDLP_` prefixed environment variables.
+- **Validated Configuration**: Deeply validated via `pydantic-settings`, with full support for `AIDLP_` prefixed environment variables. Unknown keys *inside* a section are rejected outright; unknown top-level sections are ignored (so a stray `AIDLP_*` variable cannot stop startup) but are named in a startup warning rather than dropped in silence.
 - **Smart Body Routing & JSON Parsing**: Safely ignores binary files. For `application/json`, it recursively traverses the AST to redact only string values, preserving the exact JSON structure and NLP context.
 - **Enterprise Observability**: Native Prometheus metrics (`/metrics`) and structured JSON logging.
 - **Fail Closed Security**: Hardened safety loop returns a clean JSON 500 error `{"error": {"message": "DLP Policy Violation"}}` on failure, preventing downstream parser crashes.
@@ -167,7 +167,22 @@ curl -x http://localhost:8080 \
 
 ## Observability
 
-Prometheus metrics are available at `http://localhost:9090`.
+Prometheus metrics are available at `http://localhost:9090` (loopback by default; see `proxy.metrics_host`).
+
+### Health endpoint
+
+`GET /_health` through the proxy returns JSON and is exempt from
+`Proxy-Authorization`, so container health checks work without credentials:
+
+```json
+{"status": "ok", "version": "4.0.0", "details": {"terms_loaded": true, "ml_workers_alive": 4}}
+```
+
+`200` when healthy, `503` when a subsystem is degraded — terms failed to load or
+have gone stale, the Vault circuit breaker is open, the ML worker pool is dead,
+or the term poller stopped. It is covered by the same compatibility policy as
+the CLI flags.
+
 - `dlp_requests_total`: Total requests processed.
 - `dlp_redacted_total`: Requests containing sensitive data.
 - `dlp_pii_detected_total`: Count of PII entities by type (e.g., `PERSON`).

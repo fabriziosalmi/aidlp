@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from typing import Optional
 
+from src import __version__
 from src.config import config
 
 app = typer.Typer()
@@ -21,6 +22,12 @@ SSL_BUMP_DEPRECATED = (
     "  --upstream-insecure (or proxy.upstream_insecure in config.yaml)."
 )
 
+# Distinct exit codes so a wrapper script can tell these apart; every failure
+# used to exit 1, which is indistinguishable from any other error.
+EXIT_MITMDUMP_MISSING = 3
+EXIT_EMPTY_TERM = 4
+EXIT_VAULT_MANAGED_TERMS = 5
+
 UPSTREAM_INSECURE_WARNING = (
     "WARNING: upstream TLS certificate verification is DISABLED.\n"
     "  The proxy will accept any certificate the upstream presents, so the\n"
@@ -28,6 +35,31 @@ UPSTREAM_INSECURE_WARNING = (
     "  Redaction does not protect you from that. Use this only against a\n"
     "  known upstream with a private CA, never on the open internet."
 )
+
+
+def _version_callback(value: bool):
+    if value:
+        typer.echo(f"aidlp {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    """AI DLP Proxy."""
+
+
+@app.command()
+def version():
+    """Print the running version."""
+    typer.echo(f"aidlp {__version__}")
 
 
 @app.command()
@@ -82,7 +114,7 @@ def start(
         os.execvpe("mitmdump", cmd, env)
     except FileNotFoundError:
         typer.echo("Error: mitmdump not found. Are you in the poetry shell?")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_MITMDUMP_MISSING)
 
 
 @app.command()
@@ -170,14 +202,14 @@ def add_term(term: str):
     """
     if not term or term.strip() == "":
         typer.echo("Error: Term cannot be empty or whitespace-only.")
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_EMPTY_TERM)
 
     provider_type = config.dlp.secrets_provider.type
     if provider_type == "vault":
         typer.echo(
             "Error: Configured to use Vault. Please add secrets directly to Vault."
         )
-        raise typer.Exit(1)
+        raise typer.Exit(EXIT_VAULT_MANAGED_TERMS)
 
     terms_file = config.dlp.static_terms_file
 

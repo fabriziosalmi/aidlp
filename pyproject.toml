@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "aidlp"
-version = "3.1.0"
+version = "4.0.0"
 description = "AI Data Loss Prevention Proxy"
 authors = ["Fabrizio Salmi <fabrizio.salmi@gmail.com>"]
 readme = "README.md"
@@ -39,5 +39,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [build-system]
-requires = ["poetry-core"]
+# Unconstrained, the exact poetry-core used to build was whatever was
+# latest at build time, so two builds of one commit could differ.
+requires = ["poetry-core>=2.0,<3.0"]
 build-backend = "poetry.core.masonry.api"

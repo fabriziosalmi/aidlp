@@ -17,15 +17,13 @@ sequenceDiagram
     User->>Proxy: POST /v1/chat/completions (Sensitive Data)
     Proxy->>Proxy: Content-Type Check (JSON/Text)
 
-    par Parallel Extraction
-        Proxy->>Proxy: Check Static Rules (FlashText)
-        Proxy->>Queue: Put (Text, Future)
-        Queue->>MLWorker: Process NLP inference
-        MLWorker-->>Proxy: Set Future Result
-    end
+    Proxy->>Proxy: Check Static Rules (FlashText)
+    Proxy->>Queue: Put (Text, Future)
+    Queue->>MLWorker: Process NLP inference
+    MLWorker-->>Proxy: Set Future Result
 
     Proxy->>Proxy: Merge and Deduplicate Offsets (O(N log N))
-    Proxy->>Proxy: Apply [REDACTED] tokens backward
+    Proxy->>Proxy: Apply [REDACTED] tokens
 
     par Async Operations
         Proxy->>Proxy: Emit Prometheus Metrics
@@ -51,9 +49,21 @@ This bounded worker pool architecture protects the proxy from thread-thrashing a
 Before extraction, the proxy parses the `Content-Type` header. If the payload is `application/json`, it is fully deserialized. The proxy then performs a **recursive asynchronous traversal** of the JSON tree.
 It applies NLP extraction *only* to string values, preserving keys, integers, and the structural integrity of the JSON. This ensures that a blacklisted term won't accidentally censor a JSON key like `"model"`, which would return a 400 Bad Request from the LLM API.
 
-### 4. Parallel Redaction & Offset Merging
-In previous versions, static analysis was applied before ML, breaking the contextual window of the NLP model.
-Now, extraction runs **in parallel** on the pristine original string. Offsets (e.g., `[(5, 12, "PASSWORD"), (8, 15, "PERSON")]`) are collected, merged, deduplicated, and applied backwards. This guarantees 100% contextual accuracy for SpaCy.
+### 4. Independent Extraction & Offset Merging
+Both passes read the **pristine original string**: static extraction never
+rewrites the text before the NLP model sees it, so the contextual window SpaCy
+depends on stays intact. That, not concurrency, is what preserves accuracy.
+
+The two passes run **sequentially within a request** — `redact()` completes the
+FlashText scan, then awaits the ML result — so a single request's redaction
+latency is *additive* (static + ML), not the maximum of the two. Static
+extraction is microseconds against an ML analysis measured in milliseconds, so
+in practice the ML pass dominates. Concurrency across *different* requests is
+what the worker pool provides.
+
+Offsets (e.g. `[(5, 12, "PASSWORD"), (8, 15, "PERSON")]`) are collected from
+both passes, merged, deduplicated, and substituted in one left-to-right pass
+that copies the gaps between spans and joins once.
 
 ### 5. Atomic Secret Reloading
 The engine spawns a background `_vault_poller` task that connects to HashiCorp Vault. Every 60 seconds, it fetches the latest secrets and creates a new `KeywordProcessor` in memory. Once ready, it performs an **atomic reference swap**, ensuring zero-downtime key rotation without locking the request pipeline.

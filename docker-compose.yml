@@ -25,6 +25,17 @@ services:
       - AIDLP_DLP__ML_ENABLED=true
       - AIDLP_DLP__NLP_MODEL=en_core_web_sm
       - AIDLP_DLP__SECRETS_PROVIDER__TYPE=file
+    volumes:
+      # Without these the image ships no terms.txt, and the file provider
+      # quietly creates one holding three placeholder words -- so the quick
+      # start 'worked' while protecting almost nothing.
+      - ./terms.txt:/app/terms.txt
+      - ./config.yaml:/app/config.yaml:ro
+      # mitmproxy stores its CA under $HOME/.mitmproxy, and this image runs
+      # as appuser (useradd -m), so that is /home/appuser -- not /root.
+      # The wrong path persists nothing: the CA is regenerated on every
+      # recreate, invalidating every client that trusted the previous one.
+      - ./certs:/home/appuser/.mitmproxy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     deploy:

@@ -1,8 +1,8 @@
 import os
 import logging
 import yaml
-from typing import Optional, List
-from pydantic import BaseModel, Field, ValidationError
+from typing import Literal, Optional, List, get_args
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -12,21 +12,51 @@ from pydantic_settings import (
 logger = logging.getLogger("dlp_proxy")
 
 
+# Reject unknown keys inside every section. A mistyped nested key used to be
+# dropped in silence, so the intended override simply never applied.
+_STRICT = ConfigDict(extra="forbid")
+
+
 class VaultConfig(BaseModel):
+    model_config = _STRICT
+
     url: str = "http://localhost:8200"
     token: Optional[str] = None
     path: str = "aidlp/terms"
 
 
 class SecretsProviderConfig(BaseModel):
-    type: str = "file"
+    model_config = _STRICT
+
+    # A bare string compared with == "vault" meant that "Vault", "VAULT" or a
+    # typo silently selected the file provider instead of failing.
+    type: Literal["file", "vault"] = "file"
     vault: Optional[VaultConfig] = None
+
+    @model_validator(mode="after")
+    def _vault_payload_matches_type(self):
+        """Keep the discriminator and its payload consistent.
+
+        `type: vault` with no vault section used to construct happily and
+        only fail later, at the first term fetch.
+        """
+        if self.type == "vault" and self.vault is None:
+            raise ValueError(
+                "secrets_provider.type is 'vault' but no secrets_provider.vault "
+                "section was supplied"
+            )
+        return self
 
 
 class DLPConfig(BaseModel):
+    model_config = _STRICT
+
     static_terms_file: str = "terms.txt"
     ml_enabled: bool = True
-    ml_threshold: float = 0.5
+    # Compared directly against a presidio confidence score, which is in
+    # [0, 1]. Anything above 1.0 made every comparison false and silently
+    # disabled ML redaction while the proxy kept reporting normal stats.
+    ml_threshold: float = Field(0.5, ge=0.0, le=1.0)
     # Upper bound on a single ML analysis, in seconds. Exceeding it raises,
     # which the proxy turns into a fail-closed 500 rather than a hang.
     ml_timeout: float = 30.0
@@ -34,6 +64,10 @@ class DLPConfig(BaseModel):
     # Applies to the file provider as well as Vault, so `aidlp add-term`
     # reaches a running proxy without a restart.
     reload_interval: float = 60.0
+    # ML analysis capacity. Previously literals in dlp_engine.py, so the only
+    # way to add workers or deepen the queue was to edit the source.
+    ml_workers: int = Field(4, ge=1, le=64)
+    ml_queue_maxsize: int = Field(1000, ge=1)
     nlp_model: str = "en_core_web_sm"
     entities: Optional[List[str]] = None
     secrets_provider: SecretsProviderConfig = Field(
@@ -43,14 +77,16 @@ class DLPConfig(BaseModel):
 
 
 class ProxyConfig(BaseModel):
-    port: int = 8080
+    model_config = _STRICT
+
+    port: int = Field(8080, ge=1, le=65535)
 
     # Loopback by default. The proxy authorises nobody unless auth_token is
     # set, so binding every interface would hand an open relay to any host
     # that can reach this machine. Widening this is an explicit decision.
     host: str = "127.0.0.1"
 
-    metrics_port: int = 9090
+    metrics_port: int = Field(9090, ge=1, le=65535)
 
     # The Prometheus endpoint carries no authentication of its own, so it
     # stays off the network unless deliberately opened. Kept separate from
@@ -158,8 +194,48 @@ def find_env_shadowed_keys(raw_config: dict, environ=None) -> list[str]:
     return sorted(shadowed)
 
 
+def _nested_model(annotation):
+    """Return the BaseModel behind a field annotation, unwrapping Optional."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for arg in get_args(annotation) or ():
+        if isinstance(arg, type) and issubclass(arg, BaseModel):
+            return arg
+    return None
+
+
+def find_unknown_config_keys(raw_config: dict, model=None, path=()) -> list[str]:
+    """List config.yaml keys that map to no field on the model.
+
+    AppConfig keeps extra="ignore" so a stray AIDLP_* variable cannot crash
+    startup, but that also means a renamed or misspelled top-level section is
+    dropped without a word. Name them instead.
+    """
+    model = model or AppConfig
+    fields = model.model_fields
+    unknown: list[str] = []
+
+    for key, value in (raw_config or {}).items():
+        here = path + (str(key),)
+        if key not in fields:
+            unknown.append(".".join(here))
+            continue
+        sub = _nested_model(fields[key].annotation)
+        if sub is not None and isinstance(value, dict):
+            unknown.extend(find_unknown_config_keys(value, sub, here))
+
+    return sorted(unknown)
+
+
 def load_config(config_path: str = "config.yaml") -> AppConfig:
     raw_config = _read_yaml(config_path)
+
+    unknown = find_unknown_config_keys(raw_config)
+    if unknown:
+        logger.warning(
+            f"Unrecognised keys in {config_path}, which will not take effect: "
+            + ", ".join(unknown)
+        )
 
     shadowed = find_env_shadowed_keys(raw_config)
     if shadowed:
