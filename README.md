@@ -133,6 +133,10 @@ dlp:
   static_terms_file: "terms.txt"
   ml_enabled: true
   nlp_model: "en_core_web_sm"
+  # Forward with static-only redaction when the ML stage times out, instead of
+  # failing the request closed. Off by default: partial redaction is a real
+  # reduction in coverage, so it has to be a deliberate choice.
+  degrade_to_static_on_ml_timeout: false
   secrets_provider:
     type: "vault"
     vault:
@@ -183,12 +187,40 @@ have gone stale, the Vault circuit breaker is open, the ML worker pool is dead,
 or the term poller stopped. It is covered by the same compatibility policy as
 the CLI flags.
 
-- `dlp_requests_total`: Total requests processed.
-- `dlp_redacted_total`: Requests containing sensitive data.
-- `dlp_pii_detected_total`: Count of PII entities by type (e.g., `PERSON`).
-- `dlp_active_connections`: Current active connections.
+### Metrics
 
-Logs are printed in structured JSON format to stdout.
+Traffic:
+
+- `dlp_flows_seen_total`: Every request the proxy saw, inspected or not.
+- `dlp_requests_total`: Requests that reached DLP processing.
+- `dlp_redacted_total`: Requests in which something was redacted.
+- `dlp_pii_detected_total{type}`: PII entities found, by type (e.g. `PERSON`).
+- `dlp_active_connections`: Requests currently in flight.
+- `dlp_latency_seconds`: Histogram of time spent in DLP processing.
+- `dlp_token_usage_total{direction}`: Estimated tokens in and out.
+
+Term-source health — these are what an alert on "redaction terms have gone
+stale" should be built from:
+
+- `dlp_term_reload_failures_total{source}`: Failed term refreshes.
+- `dlp_terms_last_reload_success_timestamp_seconds`: Unix time of the last
+  successful load. Alert on its age.
+- `dlp_term_poller_alive`: `1` while the refresh poller is running.
+
+ML pool health:
+
+- `dlp_ml_workers_alive`: Live ML worker tasks.
+- `dlp_ml_worker_restarts_total`: Workers replaced after exceeding the hard
+  analysis ceiling.
+- `dlp_ml_degraded_total`: Requests forwarded with static-only redaction after
+  an ML timeout. Non-zero only if `dlp.degrade_to_static_on_ml_timeout` is on.
+
+`aidlp stats` surfaces a subset of these (requests, redactions, PII entities,
+active connections); the full set is on the metrics port.
+
+Logs are printed in structured JSON format to stdout, and carry the
+`X-Request-ID` correlation identifier, which is also threaded into the DLP
+engine so an ML failure names the request that caused it.
 
 ## License
 

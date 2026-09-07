@@ -135,16 +135,29 @@ def stats():
 
     # Parse simple metrics using regex
     def get_metric(name):
-        match = re.search(f"^{name} ([\\d\\.]+)", metrics, re.MULTILINE)
+        match = re.search(f"^{re.escape(name)} ([\\d\\.eE+-]+)", metrics, re.MULTILINE)
         return float(match.group(1)) if match else 0
+
+    def sum_labelled_metric(name):
+        """Sum a labelled counter across its label values.
+
+        dlp_pii_detected_total is emitted per type, as
+        `dlp_pii_detected_total{type="PERSON"} 3.0`, so the unlabelled
+        pattern above never matches it -- which is why it was missing from
+        this command despite README listing it.
+        """
+        pattern = rf"^{re.escape(name)}\{{[^}}]*\}} ([\d\.eE+-]+)"
+        return sum(float(v) for v in re.findall(pattern, metrics, re.MULTILINE))
 
     total_requests = get_metric("dlp_requests_total")
     redacted_requests = get_metric("dlp_redacted_total")
     active_connections = get_metric("dlp_active_connections")
+    pii_detected = sum_labelled_metric("dlp_pii_detected_total")
 
     typer.echo("DLP Proxy Stats (Prometheus):")
     typer.echo(f"  Total Requests: {int(total_requests)}")
     typer.echo(f"  Redacted Requests: {int(redacted_requests)}")
+    typer.echo(f"  PII Entities Detected: {int(pii_detected)}")
     typer.echo(f"  Active Connections: {int(active_connections)}")
 
 

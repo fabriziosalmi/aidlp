@@ -218,3 +218,93 @@ def test_missing_terms_file_is_announced(tmp_path, caplog):
 
     assert terms == list(FileTermProvider.DEFAULT_TERMS)
     assert "placeholder terms" in caplog.text
+
+
+# --- degraded mode is opt-in, and never silent -------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ml_timeout_fails_closed_by_default():
+    """The default must stay fail-closed: partial redaction is a real
+    reduction in coverage."""
+    engine = DLPEngine(dlp_config=DLPConfig(ml_enabled=False))
+    engine.ml_enabled = True
+    engine.analyzer = object()
+    engine.ml_timeout = 0.05
+
+    with pytest.raises(asyncio.TimeoutError):
+        await engine.redact("some text")
+
+
+@pytest.mark.asyncio
+async def test_ml_timeout_can_degrade_to_static_when_enabled(caplog):
+    engine = DLPEngine(
+        dlp_config=DLPConfig(
+            ml_enabled=False, degrade_to_static_on_ml_timeout=True
+        )
+    )
+    engine.ml_enabled = True
+    engine.analyzer = object()
+    engine.ml_timeout = 0.05
+    engine.keyword_processor.add_keyword("alpha", "alpha")
+
+    with caplog.at_level(logging.WARNING, logger="dlp_proxy"):
+        redacted, stats = await engine.redact("alpha and more")
+
+    assert "[REDACTED]" in redacted          # static coverage still applied
+    assert stats["ml_degraded"] is True      # and the degradation is recorded
+    assert "Detection coverage is reduced" in caplog.text
+
+
+# --- the Vault call itself is bounded ----------------------------------------
+
+
+def test_vault_client_is_given_a_timeout():
+    """The breaker counts failures; a slow-but-not-erroring Vault could stall
+    a fetch without ever incrementing that count."""
+    from src.dlp_engine import VaultTermProvider
+
+    with patch("src.dlp_engine.hvac.Client") as MockClient:
+        VaultTermProvider("http://v:8200", "tok", "p", timeout=3.5)
+
+    assert MockClient.call_args.kwargs["timeout"] == 3.5
+
+
+# --- stats reports what the README promises ----------------------------------
+
+
+def test_stats_sums_the_labelled_pii_counter():
+    """dlp_pii_detected_total is emitted per type, so the unlabelled pattern
+    the CLI used never matched it."""
+    from typer.testing import CliRunner
+    from src.cli import app
+
+    response = MagicMock()
+    response.raise_for_status = MagicMock()
+    response.text = (
+        "dlp_requests_total 42.0\n"
+        "dlp_redacted_total 7.0\n"
+        "dlp_active_connections 3.0\n"
+        'dlp_pii_detected_total{type="PERSON"} 3.0\n'
+        'dlp_pii_detected_total{type="EMAIL_ADDRESS"} 2.0\n'
+    )
+
+    with patch("src.cli.requests.get", return_value=response):
+        result = CliRunner().invoke(app, ["stats"])
+
+    assert "PII Entities Detected: 5" in result.output
+
+
+# --- the composition root resolves its own imports ---------------------------
+
+
+def test_proxy_core_puts_the_repo_root_on_sys_path():
+    """It used to rely on cli.py exporting PYTHONPATH before exec'ing
+    mitmdump, which driving mitmdump directly bypasses."""
+    import sys
+    from pathlib import Path
+
+    import src.proxy_core as proxy_core
+
+    repo_root = Path(proxy_core.__file__).resolve().parent.parent
+    assert str(repo_root) in sys.path

@@ -21,6 +21,10 @@ class VaultConfig(BaseModel):
     model_config = _STRICT
 
     url: str = "http://localhost:8200"
+    # Bounds the HTTP call itself. The circuit breaker counts *failures*, so a
+    # Vault that is slow but not yet erroring could stall a fetch without ever
+    # incrementing the failure count that would open the breaker.
+    timeout: float = Field(10.0, gt=0)
     token: Optional[str] = None
     path: str = "aidlp/terms"
 
@@ -64,6 +68,11 @@ class DLPConfig(BaseModel):
     # Applies to the file provider as well as Vault, so `aidlp add-term`
     # reaches a running proxy without a restart.
     reload_interval: float = 60.0
+    # When only the ML stage times out, forward with static-keyword redaction
+    # instead of failing the request closed. OFF by default: partial redaction
+    # is a real reduction in coverage, and for a DLP proxy that has to be a
+    # deliberate choice rather than a default.
+    degrade_to_static_on_ml_timeout: bool = False
     # ML analysis capacity. Previously literals in dlp_engine.py, so the only
     # way to add workers or deepen the queue was to edit the source.
     ml_workers: int = Field(4, ge=1, le=64)
