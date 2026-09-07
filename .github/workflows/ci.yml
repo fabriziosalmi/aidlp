@@ -66,3 +66,33 @@ jobs:
       run: |
         poetry run pip install -q pytest-cov pytest-asyncio
         PYTHONPATH=. poetry run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
+
+    # Fails on any vulnerability not explicitly acknowledged in
+    # osv-scanner.toml, which records why each exception exists and when it
+    # must be re-reviewed. The scanner binary is pinned and checksummed for
+    # the same reason the image build now verifies its own downloads.
+    - name: Scan dependencies for known vulnerabilities
+      env:
+        OSV_VERSION: v2.5.1
+        OSV_SHA256: f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be
+      run: |
+        curl -sSL -o osv-scanner \
+          "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+        echo "${OSV_SHA256}  osv-scanner" | sha256sum -c -
+        chmod +x osv-scanner
+        ./osv-scanner scan source --config=osv-scanner.toml \
+          --lockfile=poetry.lock --lockfile=docs/package-lock.json
+
+    - name: Inventory third-party licences
+      run: |
+        poetry run pip install -q pip-licenses==5.5.5
+        poetry run pip-licenses --format=csv --output-file=licenses-python.csv
+        python3 scripts/check_licenses.py < licenses-python.csv
+
+    - name: Upload licence inventory
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: licenses-python
+        path: licenses-python.csv
+        if-no-files-found: warn
