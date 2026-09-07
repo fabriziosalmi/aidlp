@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-09-07
+
+### Fixed
+- `proxy_core.py` puts its own repo root on `sys.path`. It resolved
+  `from src...` only because `cli.py` exported `PYTHONPATH` before exec'ing
+  mitmdump; driving mitmdump directly — which the deployment guide does —
+  bypassed that and the import failed before the addon was constructed.
+- `aidlp stats` reports PII entities detected. `dlp_pii_detected_total` is
+  emitted per type, so the command's unlabelled pattern could never match it.
+- The Vault HTTP call is bounded by the new `vault.timeout` (default 10s). The
+  circuit breaker counts failures, so a Vault that was slow but not yet
+  erroring could stall a fetch without incrementing the count that opens it.
+- A duplicate `dlp:` key in README's `config.yaml` example made it invalid
+  YAML.
+
+### Added
+- `dlp.degrade_to_static_on_ml_timeout` (default **false**). When an ML timeout
+  is the only failure, the request can be forwarded with the static-keyword
+  redaction that already completed instead of failing closed. Off by default:
+  reducing detection coverage is a deliberate choice, not a default. While on,
+  each occurrence is recorded in the request stats, counted on
+  `dlp_ml_degraded_total`, and logged with the request id.
+- README's Observability section documents every exposed metric, grouped by
+  purpose, and states that `aidlp stats` surfaces only a subset.
+
 ## [4.0.0] - 2026-09-07
 
 Sweep of the remaining audit findings. Two changes alter an existing contract,

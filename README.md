@@ -179,7 +179,7 @@ Prometheus metrics are available at `http://localhost:9090` (loopback by default
 `Proxy-Authorization`, so container health checks work without credentials:
 
 ```json
-{"status": "ok", "version": "4.0.0", "details": {"terms_loaded": true, "ml_workers_alive": 4}}
+{"status": "ok", "version": "4.0.1", "details": {"terms_loaded": true, "ml_workers_alive": 4}}
 ```
 
 `200` when healthy, `503` when a subsystem is degraded — terms failed to load or

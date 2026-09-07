@@ -39,7 +39,7 @@ FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1
 # docker/metadata-action adds its own labels. A plain `docker build .` or the
 # documented `docker-compose build` produced an image whose `docker inspect`
 # named no commit at all. Pass with:
-#   --build-arg VCS_REF=$(git rev-parse HEAD) --build-arg VERSION=4.0.0
+#   --build-arg VCS_REF=$(git rev-parse HEAD) --build-arg VERSION=4.0.1
 ARG VCS_REF=unknown
 ARG VERSION=unknown
 LABEL org.opencontainers.image.title="aidlp" \
