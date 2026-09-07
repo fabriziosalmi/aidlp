@@ -2,6 +2,8 @@ import typer
 import os
 import requests
 import re
+import shutil
+import tempfile
 from typing import Optional
 
 from src.config import config
@@ -114,6 +116,53 @@ def stats():
     typer.echo(f"  Active Connections: {int(active_connections)}")
 
 
+TERMS_BACKUP_SUFFIX = ".bak"
+
+
+def write_terms_atomically(terms_file: str, terms: list) -> str:
+    """Replace `terms_file` with `terms`, keeping the previous copy alongside.
+
+    The old in-place append could be interrupted between open() and the
+    buffered write reaching disk, leaving anything from no change at all to a
+    truncated trailing line -- which the next start would load as a keyword.
+    Writing to a temp file and renaming makes the update all-or-nothing.
+
+    The `.bak` written first is the known-good state to restore from if the
+    file is later damaged; there was previously nothing to recover from.
+
+    Returns the backup path (which may not exist on a first write).
+    """
+    directory = os.path.dirname(os.path.abspath(terms_file)) or "."
+    backup_path = terms_file + TERMS_BACKUP_SUFFIX
+
+    if os.path.exists(terms_file):
+        shutil.copy2(terms_file, backup_path)
+
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".terms-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("".join(f"{term}\n" for term in terms))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, terms_file)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+    # Without fsync on the directory the rename itself can still be lost.
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return backup_path  # platform without directory fds; the rename stands
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+    return backup_path
+
+
 @app.command()
 def add_term(term: str):
     """
@@ -132,21 +181,25 @@ def add_term(term: str):
 
     terms_file = config.dlp.static_terms_file
 
+    existing = []
     if os.path.exists(terms_file):
-        with open(terms_file, "r") as f:
-            existing = set(line.strip() for line in f)
-    else:
-        existing = set()
+        with open(terms_file, "r", encoding="utf-8") as f:
+            existing = [line.strip() for line in f if line.strip()]
 
-    if term not in existing:
-        with open(terms_file, "a") as f:
-            f.write(f"\n{term}")
-        typer.echo(f"Added '{term}' to {terms_file}.")
-        typer.echo(
-            "Note: If the proxy is running, Vault poller will pick this up automatically if configured, otherwise restart proxy or wait for hot-reload."
-        )
-    else:
+    if term in existing:
         typer.echo(f"'{term}' already exists in {terms_file}.")
+        return
+
+    backup_path = write_terms_atomically(terms_file, existing + [term])
+    typer.echo(f"Added '{term}' to {terms_file}.")
+
+    if os.path.exists(backup_path):
+        typer.echo(f"Previous contents saved to {backup_path}.")
+
+    typer.echo(
+        f"A running proxy re-reads {terms_file} within "
+        f"{int(config.dlp.reload_interval)}s. No restart needed."
+    )
 
 
 if __name__ == "__main__":

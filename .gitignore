@@ -42,6 +42,8 @@ proxy_verify.log
 proxy_obs.log
 
 # Project specific
+# Runtime snapshot written before each `aidlp add-term`.
+terms.txt.bak
 stats.json
 *.cast
 commits.txt

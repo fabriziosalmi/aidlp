@@ -70,6 +70,27 @@ Deploy as a standalone Service/Deployment.
 
 **Recommended**: Centralized Gateway for initial rollout to simplify certificate management.
 
+## Terms File Durability
+
+`terms.txt` is the only mutable state the proxy owns. `aidlp add-term` writes it
+atomically — snapshot to `terms.txt.bak`, write a temp file, `fsync`, rename —
+so a kill mid-write leaves either the old contents or the new, never a half-line
+that would be loaded as a keyword on the next start.
+
+**Recovery.** If the live file is damaged:
+
+```bash
+cp terms.txt.bak terms.txt      # restore the state before the last add-term
+```
+
+A running proxy re-reads the file within `dlp.reload_interval` seconds (default
+60), so no restart is required.
+
+The `.bak` is a single-step recovery point, not a history. In containers it
+lives inside the container filesystem unless `terms.txt` is on a mounted volume
+— mount the file, or keep it in version control, if you need it to survive the
+container.
+
 ## Vault Integration
 
 Securely manage your static sensitive terms using HashiCorp Vault.

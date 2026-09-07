@@ -71,6 +71,7 @@ Generate a token with `openssl rand -hex 32` and supply it via
 | :--- | :--- | :--- | :--- |
 | `static_terms_file` | `string` | `terms.txt` | Path to the file containing static keywords. Ignored if provider is `vault`. |
 | `ml_enabled` | `bool` | `true` | Enables the ML-based PII detection engine (Presidio). |
+| `reload_interval` | `float` | `60.0` | How often the background poller re-reads the term source, in seconds. Applies to the file provider as well as Vault. |
 | `ml_threshold` | `float` | `0.5` | Confidence threshold (0.0-1.0). Higher values reduce false positives but may miss some PII. |
 | `nlp_model` | `string` | `en_core_web_sm` | SpaCy model to use. Options: `en_core_web_lg` (accurate), `en_core_web_sm` (fast). |
 | `entities` | `list` | `null` | List of entities to detect (e.g., `["PERSON", "EMAIL_ADDRESS"]`). `null` detects all supported types. |
@@ -79,6 +80,30 @@ Generate a token with `openssl rand -hex 32` and supply it via
 | `secrets_provider.vault.url` | `string` | - | URL of the Vault server (e.g., `http://localhost:8200`). |
 | `secrets_provider.vault.path` | `string` | - | Path to the KV secret (e.g., `aidlp/terms`). |
 | `secrets_provider.vault.token` | `string` | - | Vault token. **Recommended:** Use `VAULT_TOKEN` env var instead. |
+
+### The terms file
+
+`terms.txt` is rewritten atomically. `aidlp add-term` copies the current file to
+`terms.txt.bak`, writes the full new contents to a temporary file in the same
+directory, `fsync`s it, and renames it into place. An interrupted run therefore
+leaves either the old file or the new one, never a truncated trailing line.
+
+**To restore** the previous known-good state:
+
+```bash
+cp terms.txt.bak terms.txt
+```
+
+A running proxy picks that up within `reload_interval` seconds; no restart is
+needed. `terms.txt.bak` holds only the state from immediately before the last
+`add-term`, so it is a recovery point, not a history — put `terms.txt` under
+version control or your normal backup schedule if you need more than that.
+
+Entries are validated when loaded: blank lines are ignored, and entries longer
+than 512 characters or containing control characters are skipped with a warning
+naming the position and reason (never the term itself, since these are secrets).
+A `terms.txt` that is not valid UTF-8 is treated as a failed fetch, so the proxy
+keeps its last known-good keywords rather than redacting from a mangled file.
 
 ## Environment Variables
 
