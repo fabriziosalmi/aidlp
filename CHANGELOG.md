@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-09-07
+
+### ⚠️ BREAKING: the proxy no longer relays for anonymous callers
+
+`DLPAddon.request` forwarded every request once DLP redaction had run, with
+nothing establishing who the caller was. Combined with a default bind of
+`0.0.0.0`, any host that could reach the port could use the proxy to fetch
+whatever upstream a request named, and could read the unauthenticated
+Prometheus endpoint. An open relay is a poor thing for a data-loss-prevention
+appliance to be.
+
+- Added `proxy.auth_token`. When set, callers must present
+  `Proxy-Authorization: Bearer <token>` or `Basic base64(anyuser:<token>)`;
+  anything else gets `407` with a `Proxy-Authenticate` challenge. The
+  comparison is constant-time, and the header is **stripped before the request
+  is forwarded** so the secret never reaches the upstream.
+- `CONNECT` is authorised in `http_connect`, before the tunnel exists —
+  checking only in `request()` would let an unauthenticated caller open it
+  first.
+- `proxy.host` now defaults to **`127.0.0.1`** instead of `0.0.0.0`.
+- Binding a routable interface with no `auth_token` is **refused**. The refusal
+  is logged at CRITICAL, which mitmproxy treats as fatal during startup, so the
+  process exits rather than listening at all; verified end to end. If the addon
+  is driven some other way, every request is answered `403` instead of relayed.
+  On loopback without a token it runs normally, with a warning.
+- Added `proxy.metrics_host` (default `127.0.0.1`). The Prometheus listener had
+  no `addr` at all, so it bound every interface; it is deliberately a separate
+  knob, so exposing the proxy does not silently expose its metrics.
+- `/_health` remains reachable without credentials, for container health checks.
+
+`docker-compose.yml` published `8080:8080`, `9090:9090`, `9091:9090` and
+`3000:3000` to every host interface, which bypassed `proxy.host` entirely.
+All four are now bound to `127.0.0.1`. Inside the container the proxy still
+binds `0.0.0.0` — it has to, both for port publishing and for Prometheus to
+scrape `dlp-proxy:9090` — which is why the loopback publishing is what actually
+contains it.
+
+The bundled Grafana shipped `GF_SECURITY_ADMIN_PASSWORD=admin`. That default is
+gone; both it and `AIDLP_PROXY_AUTH_TOKEN` are now declared with `:?` so compose
+refuses to start rather than fall back to a credential committed in the repo.
+See the new `.env.example`.
+
+### Migration
+- Running on loopback for local development: nothing to do, beyond a warning.
+- Exposing the proxy to anything else: set `proxy.auth_token`
+  (`AIDLP_PROXY__AUTH_TOKEN`, e.g. `openssl rand -hex 32`) and have callers send
+  the `Proxy-Authorization` header. Without it the proxy will refuse to relay.
+- Using `docker compose`: copy `.env.example` to `.env` and fill in both
+  secrets. `docker compose up` now fails fast if either is missing.
+- A shared secret is a floor, not per-caller identity. Beyond a single trusted
+  host, put an authenticating reverse proxy in front.
+
 ## [2.1.0] - 2026-08-13
 
 ### Changed: environment variables now take precedence over `config.yaml`

@@ -6,11 +6,9 @@ The AI DLP Proxy is configured via a `config.yaml` file located in the root dire
 
 ```yaml
 proxy:
-  # ... network settings ...
+  # ... network and access settings ...
 dlp:
   # ... engine settings ...
-upstream:
-  # ... forwarding settings ...
 ```
 
 ## Proxy Settings
@@ -18,8 +16,10 @@ upstream:
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `port` | `int` | `8080` | The TCP port where the proxy listens for incoming connections. |
-| `host` | `string` | `0.0.0.0` | The interface to bind to. `0.0.0.0` listens on all interfaces. |
+| `host` | `string` | `127.0.0.1` | Interface to bind. Loopback by default; see the warning below before widening it. |
 | `metrics_port` | `int` | `9090` | Port for the Prometheus metrics server. |
+| `metrics_host` | `string` | `127.0.0.1` | Interface for the metrics server. Separate from `host` so exposing the proxy does not silently expose its metrics. |
+| `auth_token` | `string` | `null` | Shared secret callers present in `Proxy-Authorization`. Required to bind anything but loopback. |
 | `upstream_insecure` | `bool` | `false` | Skip verification of the upstream server's TLS certificate. **Leave this off.** See the warning below. |
 | `ssl_bump` | `bool` | — | **Deprecated in 2.0.0 and inert.** Setting it only prints a warning. |
 
@@ -42,6 +42,27 @@ Verification is now on by default. If you relied on the old behaviour, set
 `upstream_insecure: true` explicitly. HTTPS interception itself is unaffected
 and still requires the CA certificate on clients; that was always handled by
 mitmproxy, not by this setting.
+:::
+
+::: danger The proxy authorises nobody without `auth_token`
+`aidlp` does not identify its callers. Anything that can reach the port can use
+it to relay requests to whatever upstream they name, and can read the
+unauthenticated Prometheus endpoint.
+
+Because of that, since **3.0.0**:
+
+- `host` and `metrics_host` default to `127.0.0.1` rather than `0.0.0.0`.
+- Binding a routable interface with no `auth_token` set is **refused**: the
+  refusal is logged at CRITICAL, which mitmproxy treats as fatal during
+  startup, so the process exits rather than listen. Should the addon run
+  anyway, every request is answered `403` instead of relayed.
+- With a token set, callers send `Proxy-Authorization: Bearer <token>` or
+  `Basic base64(anyuser:<token>)`. The header is stripped before the request is
+  forwarded, so the secret never reaches the upstream.
+- `/_health` remains reachable without credentials, for container health checks.
+
+Generate a token with `openssl rand -hex 32` and supply it via
+`AIDLP_PROXY__AUTH_TOKEN` rather than committing it to `config.yaml`.
 :::
 
 ## DLP Settings
@@ -103,8 +124,14 @@ Other variables:
 proxy:
   # The port the proxy listens on for incoming traffic
   port: 8080
+  # Interface to bind. Loopback unless you have set an auth_token.
+  host: 127.0.0.1
   # The port for Prometheus metrics
   metrics_port: 9090
+  # The metrics endpoint is unauthenticated; keep it off the network.
+  metrics_host: 127.0.0.1
+  # Shared secret for Proxy-Authorization. Prefer AIDLP_PROXY__AUTH_TOKEN.
+  # auth_token: null
   # Skip verification of the upstream certificate. Leave this false.
   upstream_insecure: false
 

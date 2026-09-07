@@ -3,13 +3,25 @@ version: '3.8'
 services:
   dlp-proxy:
     build: .
+    # Published to loopback only. The container binds every interface
+    # internally (it has to: prometheus scrapes it over the compose network),
+    # so without this prefix Docker would publish the proxy to every
+    # interface of the host and bypass proxy.host entirely.
     ports:
-      - "8080:8080"
-      - "9090:9090" # Expose metrics
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9090:9090" # Expose metrics
     environment:
       - PYTHONUNBUFFERED=1
       - AIDLP_PROXY__PORT=8080
+      # 0.0.0.0 inside the container is required for port publishing and for
+      # prometheus to reach dlp-proxy:9090; the loopback binding above is what
+      # keeps that off the host's network.
+      - AIDLP_PROXY__HOST=0.0.0.0
       - AIDLP_PROXY__METRICS_PORT=9090
+      - AIDLP_PROXY__METRICS_HOST=0.0.0.0
+      # Required: the proxy refuses to relay on a non-loopback bind without
+      # it. No default on purpose -- a shipped one would be a known credential.
+      - AIDLP_PROXY__AUTH_TOKEN=${AIDLP_PROXY_AUTH_TOKEN:?set AIDLP_PROXY_AUTH_TOKEN (e.g. in .env) to a secret of your own}
       - AIDLP_DLP__ML_ENABLED=true
       - AIDLP_DLP__NLP_MODEL=en_core_web_sm
       - AIDLP_DLP__SECRETS_PROVIDER__TYPE=file
@@ -27,15 +39,17 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
-      - "9091:9090"
+      - "127.0.0.1:9091:9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
   grafana:
     image: grafana/grafana:10.4.1
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Required, with no fallback: the previous default was `admin`, a
+      # credential everyone already knows.
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD (e.g. in .env) to a secret of your own}
     depends_on:
       - prometheus

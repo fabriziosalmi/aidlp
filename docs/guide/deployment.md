@@ -11,9 +11,11 @@ version: '3.8'
 services:
   aidlp:
     build: .
+    # Published to loopback only. Docker publishes to every host interface
+    # unless you say otherwise, which would bypass proxy.host entirely.
     ports:
-      - "8080:8080"
-      - "9090:9090"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./config.yaml:/app/config.yaml
       - ./terms.txt:/app/terms.txt
@@ -21,7 +23,38 @@ services:
       - ./certs:/root/.mitmproxy
     environment:
       - VAULT_TOKEN=${VAULT_TOKEN}
+      # Inside the container the proxy must bind every interface for the
+      # port publishing above to reach it.
+      - AIDLP_PROXY__HOST=0.0.0.0
+      - AIDLP_PROXY__METRICS_HOST=0.0.0.0
+      # Mandatory on any non-loopback bind: without it the proxy refuses
+      # to relay rather than serve as an open proxy.
+      - AIDLP_PROXY__AUTH_TOKEN=${AIDLP_PROXY_AUTH_TOKEN:?supply a secret of your own}
 ```
+
+::: danger The proxy is an open relay without a token
+`aidlp` performs no authorisation of its own. Any caller that can open a
+connection can make it fetch whatever upstream a request names, and read the
+Prometheus endpoint.
+
+Since 3.0.0 it therefore binds `127.0.0.1` by default, and **refuses to start**
+when bound to a routable interface with no `proxy.auth_token` set — the refusal
+is logged at CRITICAL, which mitmproxy treats as fatal during startup.
+Callers then authenticate with:
+
+```
+Proxy-Authorization: Bearer <token>
+Proxy-Authorization: Basic base64(anyuser:<token>)
+```
+
+The credential is stripped before the request is forwarded, so it never reaches
+the upstream. `/_health` stays reachable without it, for container health
+checks.
+
+Exposing the proxy beyond a single trusted host wants an authenticating reverse
+proxy in front of it as well; the shared secret is a floor, not a substitute for
+per-caller identity.
+:::
 
 ## Kubernetes (K8s)
 

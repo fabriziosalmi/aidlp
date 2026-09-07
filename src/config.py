@@ -40,8 +40,24 @@ class DLPConfig(BaseModel):
 
 class ProxyConfig(BaseModel):
     port: int = 8080
-    host: str = "0.0.0.0"
+
+    # Loopback by default. The proxy authorises nobody unless auth_token is
+    # set, so binding every interface would hand an open relay to any host
+    # that can reach this machine. Widening this is an explicit decision.
+    host: str = "127.0.0.1"
+
     metrics_port: int = 9090
+
+    # The Prometheus endpoint carries no authentication of its own, so it
+    # stays off the network unless deliberately opened. Kept separate from
+    # `host`: exposing the proxy should not silently expose its metrics.
+    metrics_host: str = "127.0.0.1"
+
+    # Shared secret that callers must present in Proxy-Authorization, as
+    # either `Bearer <token>` or `Basic base64(user:<token>)`. With no token
+    # the proxy serves loopback only; on any other interface it refuses to
+    # relay rather than act as an open proxy.
+    auth_token: Optional[str] = None
 
     # Skip verification of the certificate presented by the upstream server.
     # Turning this on means the proxy accepts ANY certificate, so the prompts
