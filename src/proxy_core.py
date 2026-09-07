@@ -5,12 +5,30 @@ import ipaddress
 import json
 import logging
 import os
-from mitmproxy import ctx, http
-from src import __version__ as AIDLP_VERSION
-from src.dlp_engine import DLPEngine
-from src.config import config
-from prometheus_client import start_http_server, Counter, Histogram, Gauge
-from pythonjsonlogger import jsonlogger
+import sys
+from pathlib import Path
+
+# mitmdump loads this file by path, so `from src...` below resolved only
+# because cli.py sets PYTHONPATH before exec'ing it. Driving mitmdump
+# directly -- which the deployment guide does -- bypasses that, and the
+# import fails before the addon is ever constructed. Make the file
+# self-sufficient rather than depend on a side effect from an optional
+# module.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from mitmproxy import ctx, http  # noqa: E402
+from src import __version__ as AIDLP_VERSION  # noqa: E402
+from src.dlp_engine import DLPEngine  # noqa: E402
+from src.config import config  # noqa: E402
+from prometheus_client import (  # noqa: E402
+    start_http_server,
+    Counter,
+    Histogram,
+    Gauge,
+)
+from pythonjsonlogger import jsonlogger  # noqa: E402
 
 # Configure JSON logging
 logger = logging.getLogger("dlp_proxy")

@@ -35,6 +35,10 @@ TERM_POLLER_ALIVE = Gauge(
 
 # ML pool health.
 ML_WORKERS_ALIVE = Gauge("dlp_ml_workers_alive", "Live ML worker tasks")
+ML_DEGRADED_TOTAL = Counter(
+    "dlp_ml_degraded_total",
+    "Requests forwarded with static-only redaction after an ML timeout",
+)
 ML_WORKER_RESTARTS = Counter(
     "dlp_ml_worker_restarts_total",
     "ML workers replaced after exceeding the hard analysis ceiling",
@@ -170,8 +174,15 @@ class FileTermProvider(TermProvider):
 
 
 class VaultTermProvider(TermProvider):
-    def __init__(self, url: str, token: str, path: str, mount_point: str = "secret"):
-        self.client = hvac.Client(url=url, token=token)
+    def __init__(
+        self,
+        url: str,
+        token: str,
+        path: str,
+        mount_point: str = "secret",
+        timeout: float = 10.0,
+    ):
+        self.client = hvac.Client(url=url, token=token, timeout=timeout)
         self.path = path
         self.mount_point = mount_point
         self.breaker = pybreaker.CircuitBreaker(fail_max=3, reset_timeout=60)
@@ -454,7 +465,7 @@ class DLPEngine:
             if not (vault_cfg.url and token and vault_cfg.path):
                 raise TermFetchError("Vault configuration incomplete (url/token/path)")
             self._term_provider = VaultTermProvider(
-                vault_cfg.url, token, vault_cfg.path
+                vault_cfg.url, token, vault_cfg.path, timeout=vault_cfg.timeout
             )
         else:
             self._term_provider = FileTermProvider(self.config.static_terms_file)
@@ -555,7 +566,22 @@ class DLPEngine:
             stats["static_replacements"] += 1
 
         if self.ml_enabled and self.analyzer:
-            await self._analyze_ml(text, spans, stats, request_id)
+            try:
+                await self._analyze_ml(text, spans, stats, request_id)
+            except asyncio.TimeoutError:
+                if not self.config.degrade_to_static_on_ml_timeout:
+                    raise
+                # Explicitly enabled: forward with reduced coverage rather
+                # than block. Recorded in the stats and the metrics so the
+                # degradation is never invisible.
+                stats["ml_degraded"] = True
+                ML_DEGRADED_TOTAL.inc()
+                logger.warning(
+                    "ML analysis timed out; forwarding with static-keyword "
+                    "redaction only (degrade_to_static_on_ml_timeout is on). "
+                    "Detection coverage is reduced for this request.",
+                    extra={"request_id": request_id},
+                )
 
         if not spans:
             return text, stats
