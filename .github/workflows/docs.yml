@@ -28,9 +28,18 @@ jobs:
         with:
           node-version: 18
 
+      # npm ci enforces package-lock.json. npm install may rewrite it and
+      # resolve newer transitive versions than were reviewed, so two runs
+      # could install different trees despite the committed lockfile.
       - name: Install dependencies
         working-directory: docs
-        run: npm install
+        run: npm ci
+
+      - name: Inventory third-party licences
+        working-directory: docs
+        run: |
+          npx --yes license-checker@25.0.1 --csv > licenses-npm.csv
+          python3 ../scripts/check_licenses.py < licenses-npm.csv
 
       - name: Build docs
         working-directory: docs

@@ -7,21 +7,26 @@ RUN rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y --no-install-recommends --fix-missing build-essential curl
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
-RUN poetry self add poetry-plugin-export
+# Install Poetry from PyPI at a pinned version. The bootstrap script at
+# install.python-poetry.org is unversioned and unverified, so every build
+# trusted whatever that endpoint happened to serve.
+RUN pip install --no-cache-dir "poetry==2.4.3" "poetry-plugin-export==1.10.0"
 
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies to a specific prefix
-RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+# Export WITH hashes and make pip enforce them. Without this, an index or
+# MITM serving a different artifact under the same name and version during
+# the build would go undetected, even though poetry.lock records the hash.
+RUN poetry export -f requirements.txt --output requirements.txt
+RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.txt
 
 # Install SpaCy models directly to the prefix (Only SM to avoid 800MB bloat).
 # --no-deps: the model pins spacy<3.8 and would otherwise downgrade the
 # resolved dependency set behind poetry's back.
-RUN pip install --no-cache-dir --no-deps --prefix=/install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+# Pinned by digest for the same reason as the hash-checked install above:
+# this wheel ships inside the image and was previously fetched unverified.
+RUN pip install --no-cache-dir --no-deps --prefix=/install \
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
 
 # Final stage
 FROM python:3.12-slim

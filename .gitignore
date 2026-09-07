@@ -44,6 +44,10 @@ proxy_obs.log
 # Project specific
 # Runtime snapshot written before each `aidlp add-term`.
 terms.txt.bak
+# CI scratch: licence inventory and the pinned scanner binary.
+licenses-python.csv
+licenses-npm.csv
+osv-scanner
 stats.json
 *.cast
 commits.txt

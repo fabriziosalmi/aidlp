@@ -1,0 +1,201 @@
+# osv-scanner allow-list.
+#
+# IMPORTANT: every entry here is ACKNOWLEDGED, NOT FIXED. Each records a
+# vulnerability that cannot currently be removed, the reason why, and a date
+# after which the scanner starts failing again so it must be re-reviewed.
+#
+# Anything NOT listed fails CI. That is the point: a new vulnerability breaks
+# the build, while known-and-blocked ones stay tracked rather than forgotten.
+#
+# The four Python packages all trace to one cause: mitmproxy 12.2.3 declares
+# upper bounds at or below the vulnerable versions, and it is the newest
+# release. Poetry cannot resolve past them, and forcing it would run a
+# TLS-intercepting proxy on dependency versions its own maintainers exclude.
+#
+# NOTE: osv-scanner loads this file automatically from the working directory.
+# Regenerate it from a scan run with --no-config, or the previous allow-list
+# hides the very findings you are trying to enumerate.
+#
+# Re-review by 2026-12-06.
+
+
+# ========== Python (poetry.lock) -- ships in the image ==========
+
+# cryptography
+[[IgnoredVulns]]
+id = "GHSA-g6cj-pr64-35w5"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "GHSA-jwv3-5hgf-82ww"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "GHSA-m2h6-j472-rp4c"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3552"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3553"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3554"
+ignoreUntil = 2026-12-06
+reason = "cryptography: mitmproxy 12.2.3 caps cryptography<=48.1 and pyopenssl caps <49; fixed in 50.0.0. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+
+# h2
+[[IgnoredVulns]]
+id = "GHSA-6hr6-w5qg-qmwg"
+ignoreUntil = 2026-12-06
+reason = "h2: mitmproxy 12.2.3 pins h2==4.3.0 exactly; fixed in 4.4.1. This one IS on the proxy data path (proxy/layers/http/_http2.py) and is the most material of the four."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3628"
+ignoreUntil = 2026-12-06
+reason = "h2: mitmproxy 12.2.3 pins h2==4.3.0 exactly; fixed in 4.4.1. This one IS on the proxy data path (proxy/layers/http/_http2.py) and is the most material of the four."
+
+
+# msgpack
+[[IgnoredVulns]]
+id = "GHSA-6v7p-g79w-8964"
+ignoreUntil = 2026-12-06
+reason = "msgpack: mitmproxy 12.2.3 caps msgpack<=1.1.2; fixed in 1.2.1. Verified NOT imported by mitmdump at runtime."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3625"
+ignoreUntil = 2026-12-06
+reason = "msgpack: mitmproxy 12.2.3 caps msgpack<=1.1.2; fixed in 1.2.1. Verified NOT imported by mitmdump at runtime."
+
+
+# tornado
+[[IgnoredVulns]]
+id = "GHSA-3x9g-8vmp-wqvf"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-8423-8fgw-73vq"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-cx3h-4qpv-8hc9"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-mgf9-4vpg-hj56"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-mpf4-983q-p7j4"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-pw6j-qg29-8w7f"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "GHSA-wwv5-g3v4-889x"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3387"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3388"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3389"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.8. Verified NOT imported by mitmdump: tornado is used only by mitmweb and the console UI, neither of which aidlp runs."
+
+
+# ========== npm (docs/package-lock.json) -- docs build only ==========
+
+# nanoid
+[[IgnoredVulns]]
+id = "GHSA-28wg-ghj8-5hjv"
+ignoreUntil = 2026-12-06
+reason = "nanoid: Transitive dev dependency of vitepress; docs build only, never shipped in the image. Dependabot PR open."
+
+[[IgnoredVulns]]
+id = "GHSA-2v37-7h3g-55p8"
+ignoreUntil = 2026-12-06
+reason = "nanoid: Transitive dev dependency of vitepress; docs build only, never shipped in the image. Dependabot PR open."
+
+[[IgnoredVulns]]
+id = "GHSA-xwg4-73v4-xw9w"
+ignoreUntil = 2026-12-06
+reason = "nanoid: Transitive dev dependency of vitepress; docs build only, never shipped in the image. Dependabot PR open."
+
+
+# postcss
+[[IgnoredVulns]]
+id = "GHSA-6g55-p6wh-862q"
+ignoreUntil = 2026-12-06
+reason = "postcss: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+[[IgnoredVulns]]
+id = "GHSA-fxqj-rqcc-2cmp"
+ignoreUntil = 2026-12-06
+reason = "postcss: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+[[IgnoredVulns]]
+id = "GHSA-qx2v-qp2m-jg93"
+ignoreUntil = 2026-12-06
+reason = "postcss: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+[[IgnoredVulns]]
+id = "GHSA-r28c-9q8g-f849"
+ignoreUntil = 2026-12-06
+reason = "postcss: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+
+# rollup
+[[IgnoredVulns]]
+id = "GHSA-mw96-cpmx-2vgc"
+ignoreUntil = 2026-12-06
+reason = "rollup: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+
+# uuid
+[[IgnoredVulns]]
+id = "GHSA-w5hq-g745-h8pq"
+ignoreUntil = 2026-12-06
+reason = "uuid: Transitive dev dependency of vitepress; docs build only, never shipped. Dependabot PR open."
+
+
+# vite
+[[IgnoredVulns]]
+id = "GHSA-4w7w-66w2-5vf9"
+ignoreUntil = 2026-12-06
+reason = "vite: Pinned by vitepress 1.6.4; a fixed vite needs vitepress 2.x, a docs-framework major bump. Docs build only, never shipped."
+
+[[IgnoredVulns]]
+id = "GHSA-fx2h-pf6j-xcff"
+ignoreUntil = 2026-12-06
+reason = "vite: Pinned by vitepress 1.6.4; a fixed vite needs vitepress 2.x, a docs-framework major bump. Docs build only, never shipped."
+
+[[IgnoredVulns]]
+id = "GHSA-v6wh-96g9-6wx3"
+ignoreUntil = 2026-12-06
+reason = "vite: Pinned by vitepress 1.6.4; a fixed vite needs vitepress 2.x, a docs-framework major bump. Docs build only, never shipped."
