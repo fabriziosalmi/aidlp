@@ -19,6 +19,13 @@ updates:
     directory: "/docs"
     schedule:
       interval: "weekly"
+    # vitepress-plugin-mermaid 2.0.17, the latest release (September 2024),
+    # declares peer mermaid "10 || 11": mermaid 12 makes `npm ci` fail with
+    # ERESOLVE in Deploy Docs, which runs only on push to main, so the pull
+    # request (#83) looked green. Revisit when the plugin supports 12.
+    ignore:
+      - dependency-name: "mermaid"
+        update-types: ["version-update:semver-major"]
     groups:
       docs-dependencies:
         patterns:
