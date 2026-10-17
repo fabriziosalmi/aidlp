@@ -21,6 +21,22 @@
 
 # ========== Python (poetry.lock) -- ships in the image ==========
 
+# tornado
+[[IgnoredVulns]]
+id = "GHSA-3hv7-mjh2-fv65"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.9. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "GHSA-c2m8-h5v5-343r"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.9. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
+[[IgnoredVulns]]
+id = "GHSA-chx6-46f5-w4vp"
+ignoreUntil = 2026-12-06
+reason = "tornado: mitmproxy 12.2.3 caps tornado<=6.5.5; fixed in 6.5.9. 12.2.3 is the newest mitmproxy, so no upstream release relaxes this."
+
 # cryptography
 [[IgnoredVulns]]
 id = "GHSA-g6cj-pr64-35w5"
@@ -199,3 +215,9 @@ reason = "vite: Pinned by vitepress 1.6.4; a fixed vite needs vitepress 2.x, a d
 id = "GHSA-v6wh-96g9-6wx3"
 ignoreUntil = 2026-12-06
 reason = "vite: Pinned by vitepress 1.6.4; a fixed vite needs vitepress 2.x, a docs-framework major bump. Docs build only, never shipped."
+
+# katex (docs)
+[[IgnoredVulns]]
+id = "GHSA-238p-pmpm-9mq7"
+ignoreUntil = 2026-12-06
+reason = "katex: low (CVSS 2.1), transitive dev dependency of mermaid 11 in the docs build only, never shipped. The fix (0.18) needs mermaid 12, a docs-framework major bump."
