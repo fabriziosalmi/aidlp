@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.15"
 mitmproxy = "^12.2.2"
 flashtext = "2.7"
 presidio-analyzer = "2.2.352"
