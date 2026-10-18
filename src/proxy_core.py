@@ -28,12 +28,12 @@ from prometheus_client import (  # noqa: E402
     Histogram,
     Gauge,
 )
-from pythonjsonlogger import jsonlogger  # noqa: E402
+from pythonjsonlogger.json import JsonFormatter  # noqa: E402
 
 # Configure JSON logging
 logger = logging.getLogger("dlp_proxy")
 logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter("%(asctime)s %(levelname)s %(message)s")
+formatter = JsonFormatter("%(asctime)s %(levelname)s %(message)s")
 logHandler.setFormatter(formatter)
 if not logger.handlers:
     logger.addHandler(logHandler)
