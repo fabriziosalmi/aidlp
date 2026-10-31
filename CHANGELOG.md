@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.3] - 2026-10-31
+
+### Fixed
+- **The Docker image starts again.** The build installed the exported
+  requirements with `pip install --prefix=/install` into the same interpreter
+  that holds Poetry, and pip skipped every pin that one of Poetry's own
+  dependencies already satisfied at the same version, so those packages never
+  reached the image. 4.0.1 shipped without `shellingham` (`aidlp` failed with
+  `ModuleNotFoundError` at startup) and 4.0.2 without `cryptography`,
+  `certifi`, `cffi`, `typing-extensions` and others (`mitmdump` could not
+  start). The install now uses `--ignore-installed`.
+- The image build now runs `pip check`, `mitmdump --version` and imports the
+  proxy and DLP engines, so an image that cannot start fails the build
+  instead of being published.
+
 ## [4.0.2] - 2026-10-31
 
 ### Security
