@@ -8,10 +8,10 @@ packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.15"
-mitmproxy = "^12.2.2"
+mitmproxy = "^12.3.1"
 flashtext = "2.7"
 presidio-analyzer = "2.2.359"
-presidio-anonymizer = "2.2.364"
+presidio-anonymizer = "2.2.366"
 # typer 0.12.x builds boolean flags in a way click >= 8.4 rejects with
 # "Secondary flag is not valid for non-boolean flag", so the whole CLI
 # fails to construct. 0.16+ is the first line that works with modern click.
