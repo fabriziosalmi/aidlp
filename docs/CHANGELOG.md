@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.2] - 2026-10-31
+
+### Security
+- Dependencies with published advisories are updated in the image:
+  brotli 1.2.1, certifi 2026.10.23, cryptography 50.0.2 (with pyOpenSSL
+  26.4.0 and presidio-anonymizer 2.2.366), filelock 4.2.5, h2 4.4.1,
+  msgpack 1.2.4, pyasn1 0.6.5, setuptools 84.2.1, tornado 6.5.10, urllib3
+  2.8.0 and werkzeug 3.1.9. mitmproxy moves to 12.3.1, whose dependency caps
+  had held most of them back in 12.2.3.
+- Three tornado advisories fixed only in tornado 6.6 stay acknowledged in
+  `osv-scanner.toml`, until 2026-12-06: mitmproxy 12.3.1 still caps tornado
+  at 6.5.10, and aidlp never loads the vulnerable modules (`tornado.httputil`,
+  `tornado.http1connection`, `tornado.web`), measured with a running proxy.
+  The 35 entries that no longer matched anything are removed.
+
+### Fixed
+- `proxy_core.py` imports `JsonFormatter` from `pythonjsonlogger.json`, where
+  python-json-logger 3.1 and later keep it; the old module is a deprecated
+  shim. The dependency floor rises to python-json-logger 3.1.0.
+- The documentation site deploys again (mermaid stays on 11, which the
+  VitePress mermaid plugin supports).
+
+### Changed
+- The supported Python range is `>=3.12,<3.15`, which presidio-anonymizer
+  declares; with an open upper bound Poetry resolved an older presidio that
+  capped cryptography below the fixed release.
+
 ## [4.0.1] - 2026-09-07
 
 ### Fixed
