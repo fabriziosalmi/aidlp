@@ -22,7 +22,11 @@ COPY pyproject.toml poetry.lock ./
 # MITM serving a different artifact under the same name and version during
 # the build would go undetected, even though poetry.lock records the hash.
 RUN poetry export -f requirements.txt --output requirements.txt
-RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.txt
+# --ignore-installed: poetry itself lives in this interpreter, and its own
+# dependencies (cryptography, certifi, filelock, ...) satisfy a pin of the same
+# version, so pip skipped them and they never reached /install. That shipped
+# 4.0.2 without cryptography: mitmdump could not start.
+RUN pip install --no-cache-dir --require-hashes --ignore-installed --prefix=/install -r requirements.txt
 
 # Install SpaCy models directly to the prefix (Only SM to avoid 800MB bloat).
 # --no-deps: the model pins spacy<3.8 and would otherwise downgrade the
@@ -39,7 +43,7 @@ FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1
 # docker/metadata-action adds its own labels. A plain `docker build .` or the
 # documented `docker-compose build` produced an image whose `docker inspect`
 # named no commit at all. Pass with:
-#   --build-arg VCS_REF=$(git rev-parse HEAD) --build-arg VERSION=4.0.2
+#   --build-arg VCS_REF=$(git rev-parse HEAD) --build-arg VERSION=4.0.3
 ARG VCS_REF=unknown
 ARG VERSION=unknown
 LABEL org.opencontainers.image.title="aidlp" \
@@ -63,6 +67,13 @@ RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 
 COPY --chown=appuser:appuser src/ /app/src/
+
+# The image must be able to run what it ships: every installed distribution has
+# its requirements (pip check), and the proxy and the DLP engines import. A
+# dependency missing from /install fails the build here instead of at startup.
+RUN python -m pip check && \
+    mitmdump --version && \
+    python -c "import cryptography, presidio_analyzer, presidio_anonymizer, spacy, en_core_web_sm"
 
 # Expose proxy port
 EXPOSE 8080 9090
