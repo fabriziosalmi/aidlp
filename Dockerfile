@@ -3,7 +3,7 @@
 # weeks apart otherwise picks up a different Debian slim (different glibc /
 # openssl patch level, different Python 3.12.x) and produces a different
 # artefact from identical source. Bump deliberately.
-FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir --no-deps --prefix=/install \
     "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
 
 # Final stage
-FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 # Traceability on every build path, not just the tag-triggered workflow where
 # docker/metadata-action adds its own labels. A plain `docker build .` or the
