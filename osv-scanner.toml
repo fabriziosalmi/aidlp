@@ -36,6 +36,11 @@ id = "GHSA-r4j5-9xpp-3985"
 ignoreUntil = 2026-12-06
 reason = "tornado: mitmproxy 12.3.1 (newest) caps tornado<=6.5.10; fixed in 6.6. Not reachable in aidlp: it runs mitmdump, which never imports tornado.httputil, tornado.http1connection or tornado.web (the vulnerable header/chunked parsing and RedirectHandler). Measured 2026-10-31: mitmdump with src/proxy_core.py relaying a request loads only tornado, concurrent, escape, gen, ioloop, log, speedups, util."
 
+[[IgnoredVulns]]
+id = "GHSA-5cjw-f85j-cv6r"
+ignoreUntil = 2026-12-06
+reason = "tornado: open redirect in RedirectHandler with triple-slash paths, fixed in 6.6.1; mitmproxy 12.3.1 (newest) caps tornado<=6.5.10. Not reachable in aidlp: RedirectHandler lives in tornado.web, which mitmdump never imports. Measured 2026-10-31: mitmdump with src/proxy_core.py relaying a request loads only tornado, concurrent, escape, gen, ioloop, log, speedups, util."
+
 # ========== npm (docs/package-lock.json) -- docs build only ==========
 
 # katex (docs)
