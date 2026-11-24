@@ -3851,14 +3851,14 @@ zstd = ["backports-zstd (>=1.0.0) ; python_version < \"3.14\""]
 
 [[package]]
 name = "urwid"
-version = "4.0.7"
+version = "4.0.13"
 description = "A full-featured console (xterm et al.) user interface library"
 optional = false
 python-versions = ">=3.9.0"
 groups = ["main"]
 files = [
-    {file = "urwid-4.0.7-py3-none-any.whl", hash = "sha256:b85618b42f48ce3028405002743238c511185439cb356c3c68190c44cde4778a"},
-    {file = "urwid-4.0.7.tar.gz", hash = "sha256:c31aff787741428028b20bac3b0774fbe4f10de00ae00fe07722244d09462248"},
+    {file = "urwid-4.0.13-py3-none-any.whl", hash = "sha256:bee62404d24d06d9ffa74d834b03d5ba53c419a135b36831775fc69c6246e6fa"},
+    {file = "urwid-4.0.13.tar.gz", hash = "sha256:23afb15197b9e3b656b8c55bb3e18d50463c34db1982ec81ef5034525bea6c76"},
 ]
 
 [package.dependencies]
